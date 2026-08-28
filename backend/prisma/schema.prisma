@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+  // "native" covers local development (Windows/macOS/Linux); the Debian
+  // target is what the Docker image built from backend/Dockerfile needs.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum ReviewRating {
+  AGAIN
+  HARD
+  GOOD
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique @db.VarChar(32)
+  email        String     @unique @db.VarChar(255)
+  passwordHash String
+  role         Role       @default(USER)
+  status       UserStatus @default(ACTIVE)
+
+  currentStreak Int       @default(0)
+  bestStreak    Int       @default(0)
+  lastStudyDate DateTime? @db.Date
+
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  decks         Deck[]
+  reviews       Review[]
+  studySessions StudySession[]
+  refreshTokens RefreshToken[]
+  progress      UserProgress[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  userAgent String?
+
+  @@index([userId])
+}
+
+model Deck {
+  id          String  @id @default(uuid())
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+  isPublic    Boolean @default(false)
+  color       String? @db.VarChar(20)
+  icon        String? @db.VarChar(10)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cards         Card[]
+  studySessions StudySession[]
+
+  @@index([ownerId])
+  @@index([isPublic])
+}
+
+model Card {
+  id     String @id @default(uuid())
+  deckId String
+  deck   Deck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+
+  word             String  @db.VarChar(120)
+  meaningEn        String? @db.VarChar(1000)
+  translationPl    String? @db.VarChar(500)
+  exampleSentence  String? @db.VarChar(1000)
+  pronunciationIpa String? @db.VarChar(200)
+  partOfSpeech     String? @db.VarChar(40)
+  audioUrlUk       String? @db.VarChar(500)
+  audioUrlUs       String? @db.VarChar(500)
+
+  // Spaced repetition (SM-2 inspired) state
+  repetitions    Int       @default(0)
+  intervalDays   Int       @default(0)
+  easeFactor     Float     @default(2.5)
+  dueDate        DateTime  @default(now())
+  lapses         Int       @default(0)
+  mastered       Boolean   @default(false)
+  lastReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tags    CardTag[]
+  reviews Review[]
+
+  @@index([deckId])
+  @@index([deckId, dueDate])
+  @@index([deckId, mastered])
+}
+
+model Tag {
+  id        String    @id @default(uuid())
+  name      String    @unique @db.VarChar(40)
+  createdAt DateTime  @default(now())
+  cards     CardTag[]
+}
+
+model CardTag {
+  cardId String
+  tagId  String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([cardId, tagId])
+  @@index([tagId])
+}
+
+model Review {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  rating ReviewRating
+
+  prevInterval    Int
+  newInterval     Int
+  prevEaseFactor  Float
+  newEaseFactor   Float
+  prevRepetitions Int
+  newRepetitions  Int
+
+  responseTimeMs Int?
+
+  sessionId String?
+  session   StudySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  reviewedAt DateTime @default(now())
+
+  @@index([userId, reviewedAt])
+  @@index([cardId])
+  @@index([sessionId])
+}
+
+model StudySession {
+  id     String  @id @default(uuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deckId String?
+  deck   Deck?   @relation(fields: [deckId], references: [id], onDelete: SetNull)
+
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  cardsStudied   Int @default(0)
+  correctCount   Int @default(0)
+  incorrectCount Int @default(0)
+
+  reviews Review[]
+
+  @@index([userId, startedAt])
+}
+
+// Daily aggregate per user, backs the dashboard, contribution calendar and streaks
+model UserProgress {
+  id     String   @id @default(uuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime @db.Date
+
+  cardsReviewed   Int @default(0)
+  correctCount    Int @default(0)
+  incorrectCount  Int @default(0)
+  studyTimeMs     Int @default(0)
+  newCardsLearned Int @default(0)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
