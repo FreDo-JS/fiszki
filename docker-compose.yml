@@ -1,1 +1,82 @@
+name: fiszki
 
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fiszki}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ustaw POSTGRES_PASSWORD w pliku .env}
+      POSTGRES_DB: ${POSTGRES_DB:-fiszki}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # Port bazy wystawiony tylko na pętlę zwrotną hosta (pgAdmin, psql, Prisma
+    # Studio) — z zewnątrz Postgres pozostaje niedostępny.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fiszki} -d ${POSTGRES_DB:-fiszki}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    image: fiszki-backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fiszki}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fiszki}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?ustaw JWT_SECRET w pliku .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?ustaw JWT_REFRESH_SECRET w pliku .env}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      # Musi dokładnie odpowiadać adresowi, pod którym otwierasz frontend —
+      # inaczej middleware verifyOrigin odrzuci każdy POST/PUT/DELETE.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
+      RUN_MIGRATIONS: "true"
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000/api}
+    image: fiszki-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+  # Jednorazowe zasilenie bazy słownictwem:
+  #   docker compose --profile seed run --rm seeder
+  # Korzysta ze stage'a "builder" (ma tsx, src/ i prisma/seed.ts), więc obraz
+  # produkcyjny nie musi wozić devDependencies.
+  seeder:
+    build:
+      context: ./backend
+      target: builder
+    profiles: ["seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fiszki}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fiszki}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?ustaw JWT_SECRET w pliku .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?ustaw JWT_REFRESH_SECRET w pliku .env}
+    command: ["npx", "prisma", "db", "seed"]
+
+volumes:
+  postgres-data:

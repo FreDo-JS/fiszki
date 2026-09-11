@@ -1,0 +1,6 @@
+# Skrypty wykonywane w kontenerach muszą mieć końce linii LF, także gdy repo
+# jest klonowane na Windowsie z core.autocrlf=true (CRLF psuje shebang).
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf

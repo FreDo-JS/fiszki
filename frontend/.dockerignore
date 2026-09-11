@@ -3,3 +3,7 @@ dist
 .env
 .env.local
 *.log
+coverage
+.git
+.gitignore
+*.md
