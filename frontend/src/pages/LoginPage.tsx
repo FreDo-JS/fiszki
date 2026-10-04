@@ -40,7 +40,7 @@ export default function LoginPage() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <h1 className="text-lg font-semibold text-ink">Zaloguj się</h1>
+      <h1 className="font-display text-xl font-semibold text-ink">Zaloguj się</h1>
 
       {formError && (
         <div className="rounded-xl border border-danger/30 bg-danger/5 px-3.5 py-2.5 text-sm text-danger">{formError}</div>

@@ -144,7 +144,7 @@ export default function DeckDetailPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-ink">{deck.name}</h1>
+            <h1 className="font-display text-2xl font-bold text-ink">{deck.name}</h1>
             {deck.isPublic && <Badge tone="accent">Publiczny</Badge>}
           </div>
           {deck.description && <p className="mt-1 text-sm text-ink-muted">{deck.description}</p>}
@@ -184,23 +184,27 @@ export default function DeckDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-border bg-surface-raised p-3">
           <p className="text-xs text-ink-faint">Fiszki</p>
-          <p className="text-lg font-semibold text-ink">{deck.cardCount}</p>
+          <p className="font-display text-lg font-semibold text-ink">{deck.cardCount}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <p className="text-xs text-ink-faint">Do powtórki</p>
-          <p className="text-lg font-semibold text-accent">{deck.dueCount}</p>
+          <p className="text-xs text-ink-faint">Powtórki</p>
+          <p className="font-display text-lg font-semibold text-accent">{deck.reviewCount}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <p className="text-xs text-ink-faint">Nowe</p>
+          <p className="font-display text-lg font-semibold text-secondary">{deck.newCount}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface-raised p-3">
           <p className="text-xs text-ink-faint">Opanowane</p>
-          <p className="text-lg font-semibold text-success">{deck.masteredCount}</p>
+          <p className="font-display text-lg font-semibold text-success">{deck.masteredCount}</p>
         </div>
         <div className="col-span-2 rounded-xl border border-border bg-surface-raised p-3 sm:col-span-1">
           <p className="text-xs text-ink-faint">Postęp</p>
           <div className="mt-1.5">
-            <ProgressBar value={deck.masteryPercent} tone="success" />
+            <ProgressBar value={deck.masteryPercent} tone="success" label={`Opanowanie: ${deck.name}`} />
           </div>
         </div>
       </div>

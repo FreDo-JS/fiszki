@@ -4,49 +4,18 @@ import * as statsApi from '../api/stats';
 import * as decksApi from '../api/decks';
 import { Breakdowns, Deck, StatsOverview } from '../api/types';
 import { useAuth } from '../context/AuthContext';
-import { Badge, Button, Card, EmptyState, ProgressBar, Skeleton } from '../components/ui';
+import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { StatCard } from '../components/StatCard';
 import { DeckCard } from '../components/DeckCard';
+import { BreakdownPanel } from '../components/BreakdownPanel';
 import { Icon } from '../components/Icon';
 import { formatDuration } from '../utils/format';
-import { CARD_TYPE_LABEL, CARD_TYPE_TONE } from '../utils/cards';
-import { CardType } from '../api/types';
 
 function greeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return 'Dzień dobry';
   if (hour < 18) return 'Miłego popołudnia';
   return 'Dobry wieczór';
-}
-
-/** Shared row rendering for the "progress by type" and "by level" panels. */
-function BreakdownBar({
-  label,
-  tone,
-  total,
-  mastered,
-  due,
-  masteryPercent,
-}: {
-  label: string;
-  tone: 'accent' | 'teal' | 'warning' | 'success';
-  total: number;
-  mastered: number;
-  due: number;
-  masteryPercent: number;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="font-medium text-ink">{label}</span>
-        <span className="text-xs text-ink-faint">
-          {total === 0 ? 'brak fiszek' : `${mastered}/${total} opanowanych`}
-          {due > 0 && <span className="ml-1.5 text-accent">· {due} na dziś</span>}
-        </span>
-      </div>
-      <ProgressBar value={masteryPercent} tone={tone} size="sm" label={`Postęp: ${label}`} />
-    </div>
-  );
 }
 
 export default function DashboardPage() {
@@ -142,61 +111,8 @@ export default function DashboardPage() {
 
       {/* Progress by card type and by CEFR level. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="flex flex-col gap-4 p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-base font-semibold text-ink">Postęp według rodzaju</h2>
-            <Icon name="layers" className="h-4 w-4 text-ink-faint" />
-          </div>
-          {breakdowns ? (
-            <div className="flex flex-col gap-3.5">
-              {breakdowns.byType.map((row) => (
-                <BreakdownBar
-                  key={row.key}
-                  label={CARD_TYPE_LABEL[row.key as CardType] ?? row.key}
-                  tone={CARD_TYPE_TONE[row.key as CardType] ?? 'accent'}
-                  total={row.total}
-                  mastered={row.mastered}
-                  due={row.due}
-                  masteryPercent={row.masteryPercent}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3.5">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-9" />
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card className="flex flex-col gap-4 p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-base font-semibold text-ink">Postęp według poziomu</h2>
-            <Icon name="target" className="h-4 w-4 text-ink-faint" />
-          </div>
-          {breakdowns ? (
-            <div className="flex flex-col gap-3.5">
-              {breakdowns.byLevel.map((row) => (
-                <BreakdownBar
-                  key={row.key}
-                  label={row.key}
-                  tone="success"
-                  total={row.total}
-                  mastered={row.mastered}
-                  due={row.due}
-                  masteryPercent={row.masteryPercent}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3.5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-9" />
-              ))}
-            </div>
-          )}
-        </Card>
+        <BreakdownPanel title="Postęp według rodzaju" icon="layers" rows={breakdowns?.byType ?? null} groupBy="type" />
+        <BreakdownPanel title="Postęp według poziomu" icon="target" rows={breakdowns?.byLevel ?? null} groupBy="level" />
       </div>
 
       <div>
@@ -209,7 +125,7 @@ export default function DashboardPage() {
         </div>
 
         {decks === null && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-36" />
             ))}
@@ -226,7 +142,7 @@ export default function DashboardPage() {
         )}
 
         {decks && decks.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {decks.slice(0, 6).map((deck) => (
               <DeckCard key={deck.id} deck={deck} />
             ))}

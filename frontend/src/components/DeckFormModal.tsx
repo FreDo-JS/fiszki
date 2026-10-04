@@ -4,7 +4,8 @@ import { Button, Input, TextArea } from './ui';
 import { Deck } from '../api/types';
 import { useAuth } from '../context/AuthContext';
 
-const COLORS = ['#4F46E5', '#059669', '#D97706', '#DC2626', '#0891B2', '#7C3AED'];
+// Matches the app palette: blue, teal, amber, emerald, rose, violet.
+const COLORS = ['#2563EB', '#14B8A6', '#F59E0B', '#10B981', '#F43F5E', '#8B5CF6'];
 
 export interface DeckFormValues {
   name: string;

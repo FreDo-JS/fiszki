@@ -84,7 +84,7 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-bold text-ink">Panel administratora</h1>
+        <h1 className="font-display text-2xl font-bold text-ink">Panel administratora</h1>
         <p className="mt-1 text-sm text-ink-muted">Zarządzaj użytkownikami i przeglądaj statystyki aplikacji.</p>
       </div>
 
@@ -105,13 +105,13 @@ export default function AdminPage() {
       </div>
 
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-ink">Użytkownicy</h2>
-          <Input placeholder="Szukaj po nazwie lub e-mailu…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="max-w-xs" />
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Użytkownicy</h2>
+          <Input placeholder="Szukaj po nazwie lub e-mailu…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="sm:max-w-xs" />
         </div>
 
         <div className="overflow-x-auto rounded-2xl border border-border bg-surface-raised">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[46rem] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-ink-faint">
                 <th className="px-4 py-3">Użytkownik</th>

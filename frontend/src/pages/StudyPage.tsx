@@ -369,14 +369,19 @@ export default function StudyPage() {
                 <AudioButton word={currentCard.word} size="sm" />
               </div>
             )}
-
-            <div className="mt-auto border-t border-border pt-4">
-              <p className="mb-2 text-center text-xs text-ink-faint">Jak dobrze pamiętałeś?</p>
-              <RatingButtons onRate={handleRate} disabled={submitting || !revealed} />
-            </div>
           </Card>
         </div>
       </div>
+
+      {/* The grading row lives outside the card on purpose: a long grammar
+          explanation makes the back face scroll, and buttons inside it would
+          scroll out of reach exactly when they are needed. */}
+      {revealed && (
+        <div className="animate-slide-up">
+          <p className="mb-2 text-center text-xs text-ink-faint">Jak dobrze pamiętałeś?</p>
+          <RatingButtons onRate={handleRate} disabled={submitting} />
+        </div>
+      )}
 
       {/* Preloads the next card's audio voice list and keeps the user oriented. */}
       {nextCard && (

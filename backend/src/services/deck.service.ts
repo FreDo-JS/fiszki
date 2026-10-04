@@ -191,8 +191,13 @@ export async function duplicateDeck(user: DeckAuthContext, id: string) {
           meaningEn: card.meaningEn,
           translationPl: card.translationPl,
           exampleSentence: card.exampleSentence,
+          explanation: card.explanation,
           pronunciationIpa: card.pronunciationIpa,
           partOfSpeech: card.partOfSpeech,
+          // The copy keeps the original's taxonomy; only the SRS state is
+          // left at its defaults, so the learner starts the schedule fresh.
+          type: card.type,
+          level: card.level,
           tags: {
             create: card.tags.map((ct) => ({ tagId: ct.tagId })),
           },

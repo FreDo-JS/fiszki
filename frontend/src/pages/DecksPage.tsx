@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import * as decksApi from '../api/decks';
 import * as cardsApi from '../api/cards';
 import { Deck } from '../api/types';
-import { Button, EmptyState, Input, Skeleton } from '../components/ui';
+import { Button, EmptyState, Input, Select, Skeleton } from '../components/ui';
 import { DeckCard } from '../components/DeckCard';
 import { DeckFormModal, DeckFormValues } from '../components/DeckFormModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -97,7 +97,12 @@ export default function DecksPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-ink">Wszystkie zestawy</h1>
+        <div>
+          <h1 className="font-display text-2xl font-bold text-ink">Wszystkie zestawy</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            Zestawy publiczne zduplikuj do siebie, żeby uczyć się z własnym harmonogramem powtórek.
+          </p>
+        </div>
         <Button
           onClick={() => {
             setEditingDeck(null);
@@ -111,10 +116,11 @@ export default function DecksPage() {
       <div className="flex flex-col gap-3 sm:flex-row">
         <Input placeholder="Szukaj zestawów…" value={search} onChange={(e) => setSearch(e.target.value)} className="sm:max-w-xs" />
         {tags.length > 0 && (
-          <select
+          <Select
             value={tag}
             onChange={(e) => setTag(e.target.value)}
-            className="rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+            aria-label="Filtruj zestawy po tagu"
+            className="sm:max-w-[14rem]"
           >
             <option value="">Wszystkie tagi</option>
             {tags.map((t) => (
@@ -122,12 +128,12 @@ export default function DecksPage() {
                 {t}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </div>
 
       {decks === null && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-36" />
           ))}
@@ -144,7 +150,7 @@ export default function DecksPage() {
       )}
 
       {decks && decks.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {decks.map((deck) => (
             <DeckCard
               key={deck.id}

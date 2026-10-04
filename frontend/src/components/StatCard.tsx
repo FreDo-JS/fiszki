@@ -27,8 +27,10 @@ export function StatCard({
         <Icon name={icon} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-lg font-semibold text-ink">{value}</p>
-        <p className="truncate text-xs text-ink-muted">{label}</p>
+        <p className="truncate font-display text-lg font-semibold text-ink">{value}</p>
+        {/* The label wraps instead of truncating: in a four-column grid
+            "Seria (rekord: 12)" was being cut to "Seria (reko…". */}
+        <p className="text-xs leading-snug text-ink-muted">{label}</p>
       </div>
     </Card>
   );
