@@ -135,9 +135,18 @@ export async function getMe(userId: string) {
       currentStreak: true,
       bestStreak: true,
       lastStudyDate: true,
+      dailyNewLimit: true,
       createdAt: true,
     },
   });
   if (!user) throw ApiError.notFound('Użytkownik nie istnieje');
   return user;
+}
+
+export async function updateSettings(userId: string, input: { dailyNewLimit?: number }) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { ...(input.dailyNewLimit !== undefined ? { dailyNewLimit: input.dailyNewLimit } : {}) },
+  });
+  return getMe(userId);
 }

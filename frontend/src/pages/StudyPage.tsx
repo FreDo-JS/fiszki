@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import * as studyApi from '../api/study';
 import * as decksApi from '../api/decks';
 import { Card as CardType, Rating, StudyMode } from '../api/types';
@@ -15,6 +15,14 @@ interface SessionStats {
   correct: number;
   incorrect: number;
   startedAt: number;
+}
+
+/** Everything needed to put the session back the way it was before a grading. */
+interface LastGrading {
+  rating: Rating;
+  passed: boolean;
+  queue: CardType[];
+  cardWord: string;
 }
 
 const SESSION_SIZE = 20;
@@ -47,6 +55,8 @@ export default function StudyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [finished, setFinished] = useState(false);
   const [stats, setStats] = useState<SessionStats>({ correct: 0, incorrect: 0, startedAt: Date.now() });
+  const [lastGrading, setLastGrading] = useState<LastGrading | null>(null);
+  const [newAllowance, setNewAllowance] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const shownAtRef = useRef<number>(Date.now());
 
@@ -65,6 +75,7 @@ export default function StudyPage() {
         setSessionId(session.id);
         setQueue(due.cards);
         setSessionTotal(due.cards.length);
+        setNewAllowance(due.newAllowance);
         setStats({ correct: 0, incorrect: 0, startedAt: Date.now() });
         shownAtRef.current = Date.now();
         if (due.cards.length === 0) {
@@ -122,6 +133,9 @@ export default function StudyPage() {
       try {
         await studyApi.submitReview({ cardId: currentCard.id, rating, responseTimeMs, sessionId: sessionId ?? undefined });
         setStats((s) => (passed ? { ...s, correct: s.correct + 1 } : { ...s, incorrect: s.incorrect + 1 }));
+        // Remember the queue as it stood, so undo can restore the exact order
+        // instead of guessing where the card belonged.
+        setLastGrading({ rating, passed, queue, cardWord: currentCard.word });
 
         setQueue((prevQueue) => {
           const next = [...prevQueue];
@@ -149,8 +163,28 @@ export default function StudyPage() {
         setSubmitting(false);
       }
     },
-    [currentCard, submitting, revealed, sessionId, index, showToast]
+    [currentCard, submitting, revealed, sessionId, index, queue, showToast]
   );
+
+  const handleUndo = useCallback(async () => {
+    if (!lastGrading || submitting) return;
+    setSubmitting(true);
+    try {
+      await studyApi.undoLastReview();
+      setQueue(lastGrading.queue);
+      setStats((s) =>
+        lastGrading.passed ? { ...s, correct: Math.max(0, s.correct - 1) } : { ...s, incorrect: Math.max(0, s.incorrect - 1) }
+      );
+      setLastGrading(null);
+      setRevealed(true); // the card comes back with its answer already shown
+      shownAtRef.current = Date.now();
+      showToast('Cofnięto ostatnią ocenę', 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err), 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [lastGrading, submitting, showToast]);
 
   useEffect(() => {
     if (!loading && queue.length === 0 && !finished) {
@@ -164,6 +198,12 @@ export default function StudyPage() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (finished || loading || !currentCard) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
 
       if (e.code === 'Space' || e.key === 'Enter') {
         e.preventDefault();
@@ -189,7 +229,7 @@ export default function StudyPage() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [finished, loading, currentCard, revealed, handleReveal, handleRate, ratingByKey]);
+  }, [finished, loading, currentCard, revealed, handleReveal, handleRate, handleUndo, ratingByKey]);
 
   if (loading) {
     return (
@@ -242,7 +282,18 @@ export default function StudyPage() {
 
         {nothingToDo && (
           <p className="max-w-xs text-sm text-ink-muted">
-            Harmonogram SM-2 nie ma dziś nic zaplanowanego w tym zestawie. Wróć jutro albo zacznij nowe fiszki.
+            {mode === 'new' && newAllowance === 0 ? (
+              <>
+                Dzienny limit nowych fiszek został wyczerpany. To celowe — każda nowa fiszka wróci jeszcze
+                kilka razy jako powtórka. Limit zmienisz w{' '}
+                <Link to="/settings" className="font-medium text-accent hover:underline">
+                  ustawieniach
+                </Link>
+                .
+              </>
+            ) : (
+              'Harmonogram SM-2 nie ma dziś nic zaplanowanego w tym zestawie. Wróć jutro albo zacznij nowe fiszki.'
+            )}
           </p>
         )}
 
@@ -383,6 +434,16 @@ export default function StudyPage() {
         </div>
       )}
 
+      {lastGrading && (
+        <div className="flex justify-center animate-fade-in">
+          <Button variant="ghost" size="sm" onClick={handleUndo} disabled={submitting}>
+            <Icon name="repeat" className="h-4 w-4" />
+            Cofnij ocenę „{RATINGS.find((r) => r.rating === lastGrading.rating)?.label}” dla „{lastGrading.cardWord}”
+            <kbd className="text-[10px] opacity-70">Z</kbd>
+          </Button>
+        </div>
+      )}
+
       {/* Preloads the next card's audio voice list and keeps the user oriented. */}
       {nextCard && (
         <p className="text-center text-xs text-ink-faint">
@@ -391,7 +452,7 @@ export default function StudyPage() {
       )}
 
       <p className="hidden text-center text-xs text-ink-faint sm:block">
-        <kbd>Space</kbd> odpowiedź · <kbd>1</kbd>-<kbd>5</kbd> ocena · <kbd>A</kbd> wymowa
+        <kbd>Space</kbd> odpowiedź · <kbd>1</kbd>-<kbd>5</kbd> ocena · <kbd>Z</kbd> cofnij · <kbd>A</kbd> wymowa
       </p>
     </div>
   );

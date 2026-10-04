@@ -56,6 +56,11 @@ model User {
   bestStreak    Int       @default(0)
   lastStudyDate DateTime? @db.Date
 
+  // How many never-seen cards a day the scheduler may introduce. Without a
+  // cap, a single eager session buries the learner in repetitions a week
+  // later. 0 disables new cards entirely.
+  dailyNewLimit Int @default(20)
+
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
 
@@ -182,6 +187,14 @@ model Review {
   newEaseFactor   Float
   prevRepetitions Int
   newRepetitions  Int
+
+  // Full pre-review snapshot, so the grading can be undone exactly rather
+  // than approximately. Nullable because reviews recorded before undo
+  // existed carry no snapshot — those simply cannot be undone.
+  prevDueDate        DateTime?
+  prevLapses         Int?
+  prevMastered       Boolean?
+  prevLastReviewedAt DateTime?
 
   responseTimeMs Int?
 

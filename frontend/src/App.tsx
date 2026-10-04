@@ -10,6 +10,7 @@ import DecksPage from './pages/DecksPage';
 import DeckDetailPage from './pages/DeckDetailPage';
 import StudyPage from './pages/StudyPage';
 import StatisticsPage from './pages/StatisticsPage';
+import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/decks/:id" element={<DeckDetailPage />} />
         <Route path="/study/:deckId" element={<StudyPage />} />
         <Route path="/statistics" element={<StatisticsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/admin"
           element={

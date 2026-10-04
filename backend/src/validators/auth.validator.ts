@@ -44,3 +44,11 @@ export const loginSchema = z.object({
     password: z.string().min(1, 'Hasło jest wymagane').max(128),
   }),
 });
+
+export const updateSettingsSchema = z.object({
+  body: z.object({
+    // 0 switches new cards off entirely; the ceiling keeps one eager day from
+    // producing a backlog nobody can clear.
+    dailyNewLimit: z.coerce.number().int().min(0).max(200),
+  }),
+});

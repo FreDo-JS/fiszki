@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch makes the previous run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — typecheck & tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fiszki
+          POSTGRES_PASSWORD: fiszki_ci
+          POSTGRES_DB: fiszki_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fiszki -d fiszki_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://fiszki:fiszki_ci@localhost:5432/fiszki_test?schema=public
+      # The suite wipes its tables between tests, so these only need to exist.
+      JWT_SECRET: ci_access_secret_not_used_outside_ci
+      JWT_REFRESH_SECRET: ci_refresh_secret_not_used_outside_ci
+      CORS_ORIGIN: http://localhost:5173
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Apply migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Typecheck
+        working-directory: backend
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Typecheck the seed script
+        working-directory: backend
+        # prisma/ sits outside tsconfig's rootDir, so it needs its own pass.
+        run: >-
+          npx tsc --noEmit --esModuleInterop --skipLibCheck --target ES2022
+          --module CommonJS --moduleResolution Node --resolveJsonModule --strict
+          prisma/seed.ts
+
+      - name: Tests
+        working-directory: backend
+        run: npm test
+
+  frontend:
+    name: Frontend — typecheck & build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build (runs tsc -b first)
+        working-directory: frontend
+        run: npm run build
+
+  docker:
+    name: Docker images build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build both images
+        # .env.example carries placeholder values for every variable compose
+        # requires, so this validates the Dockerfiles and compose file without
+        # any secret. Nothing is pushed or started.
+        run: docker compose --env-file .env.example build

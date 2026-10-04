@@ -19,3 +19,8 @@ export async function fetchMe() {
   const { data } = await api.get<{ user: User }>('/auth/me');
   return data.user;
 }
+
+export async function updateSettings(input: { dailyNewLimit: number }) {
+  const { data } = await api.patch<{ user: User }>('/auth/me/settings', input);
+  return data.user;
+}

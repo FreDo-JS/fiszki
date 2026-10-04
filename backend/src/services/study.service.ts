@@ -61,6 +61,8 @@ export async function getDueQueue(user: DeckAuthContext, deckId: string, filters
 
   const baseWhere: Prisma.CardWhereInput = { deckId, ...taxonomy, ...dueWindow };
 
+  const newAllowance = await remainingNewAllowance(user.id, today);
+
   const candidates = await prisma.card.findMany({
     where: baseWhere,
     include: { tags: { include: { tag: true } } },
@@ -74,9 +76,19 @@ export async function getDueQueue(user: DeckAuthContext, deckId: string, filters
     return 2; // due today
   };
 
+  // Repetitions always come first and are never capped — they are work the
+  // learner already signed up for. Only the intake of brand new cards is
+  // rationed, so an eager session today cannot bury next week.
+  let newBudget = newAllowance;
   let queue = candidates
     .map((c) => ({ card: c, tier: tierOf(c) }))
     .sort((a, b) => a.tier - b.tier || a.card.dueDate.getTime() - b.card.dueDate.getTime())
+    .filter(({ card }) => {
+      if (card.lastReviewedAt !== null) return true;
+      if (newBudget <= 0) return false;
+      newBudget -= 1;
+      return true;
+    })
     .slice(0, limit)
     .map((x) => x.card);
 
@@ -99,8 +111,24 @@ export async function getDueQueue(user: DeckAuthContext, deckId: string, filters
 
   return {
     total,
+    newAllowance,
     cards: queue.map((c) => ({ ...c, tags: c.tags.map((t) => t.tag.name) })),
   };
+}
+
+/**
+ * How many never-seen cards the user may still start today: their daily limit
+ * minus the ones already introduced, counted across every deck so the cap
+ * cannot be sidestepped by hopping between them.
+ */
+async function remainingNewAllowance(userId: string, today: Date): Promise<number> {
+  const [settings, progress] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { dailyNewLimit: true } }),
+    prisma.userProgress.findUnique({ where: { userId_date: { userId, date: today } } }),
+  ]);
+
+  const limit = settings?.dailyNewLimit ?? 20;
+  return Math.max(0, limit - (progress?.newCardsLearned ?? 0));
 }
 
 export async function startSession(user: DeckAuthContext, deckId: string) {
@@ -172,6 +200,11 @@ export async function submitReview(user: DeckAuthContext, input: SubmitReviewInp
         newEaseFactor: nextState.easeFactor,
         prevRepetitions: card.repetitions,
         newRepetitions: nextState.repetitions,
+        // Everything undoReview needs to put the card back exactly as it was.
+        prevDueDate: card.dueDate,
+        prevLapses: card.lapses,
+        prevMastered: card.mastered,
+        prevLastReviewedAt: card.lastReviewedAt,
         responseTimeMs: input.responseTimeMs,
         sessionId: input.sessionId,
       },
@@ -233,4 +266,117 @@ export async function submitReview(user: DeckAuthContext, input: SubmitReviewInp
   });
 
   return { card: updatedCard, review };
+}
+
+/**
+ * Reverses the user's most recent grading: the card's SRS state is restored
+ * from the snapshot taken when the review was written, and every aggregate
+ * the review touched (daily progress, session counters, streak) is rolled
+ * back with it. Only the single latest review can be undone, so history stays
+ * consistent and a mis-tap is the only thing this can repair.
+ */
+export async function undoLastReview(user: DeckAuthContext) {
+  const last = await prisma.review.findFirst({
+    where: { userId: user.id },
+    orderBy: { reviewedAt: 'desc' },
+    include: { card: { include: { deck: true } } },
+  });
+
+  if (!last) throw ApiError.notFound('Nie ma czego cofnąć');
+  if (!isOwner(user, last.card.deck)) throw ApiError.forbidden('Nie masz dostępu do tej fiszki');
+  if (last.prevDueDate === null || last.prevLapses === null || last.prevMastered === null) {
+    // Recorded before the snapshot columns existed; guessing the old due date
+    // would silently corrupt the schedule, so refuse instead.
+    throw ApiError.badRequest('Tej oceny nie da się cofnąć — pochodzi sprzed wprowadzenia tej funkcji');
+  }
+
+  const wasCorrect = isPassingRating(last.rating as Rating);
+  const wasNewCard = last.prevLastReviewedAt === null;
+  const day = startOfDay(last.reviewedAt);
+
+  const card = await prisma.$transaction(async (tx) => {
+    const restored = await tx.card.update({
+      where: { id: last.cardId },
+      data: {
+        repetitions: last.prevRepetitions,
+        intervalDays: last.prevInterval,
+        easeFactor: last.prevEaseFactor,
+        lapses: last.prevLapses!,
+        mastered: last.prevMastered!,
+        dueDate: last.prevDueDate!,
+        lastReviewedAt: last.prevLastReviewedAt,
+      },
+    });
+
+    if (last.sessionId) {
+      await tx.studySession.updateMany({
+        where: { id: last.sessionId, userId: user.id },
+        data: {
+          cardsStudied: { decrement: 1 },
+          correctCount: wasCorrect ? { decrement: 1 } : undefined,
+          incorrectCount: !wasCorrect ? { decrement: 1 } : undefined,
+        },
+      });
+    }
+
+    await tx.userProgress.updateMany({
+      where: { userId: user.id, date: day },
+      data: {
+        cardsReviewed: { decrement: 1 },
+        correctCount: wasCorrect ? { decrement: 1 } : undefined,
+        incorrectCount: !wasCorrect ? { decrement: 1 } : undefined,
+        studyTimeMs: { decrement: last.responseTimeMs ?? 0 },
+        newCardsLearned: wasNewCard ? { decrement: 1 } : undefined,
+      },
+    });
+
+    await tx.review.delete({ where: { id: last.id } });
+    await recomputeStreak(tx, user.id);
+
+    return restored;
+  });
+
+  return { card, undoneRating: last.rating };
+}
+
+/**
+ * Rebuilds the streak from the daily progress rows. Undoing the only review
+ * of a day has to be able to take the streak back down, and recomputing is
+ * the one way to get that right without a second ledger.
+ */
+async function recomputeStreak(tx: Prisma.TransactionClient, userId: string) {
+  const days = await tx.userProgress.findMany({
+    where: { userId, cardsReviewed: { gt: 0 } },
+    orderBy: { date: 'desc' },
+    select: { date: true },
+    take: 400,
+  });
+
+  if (days.length === 0) {
+    await tx.user.update({ where: { id: userId }, data: { currentStreak: 0, lastStudyDate: null } });
+    return;
+  }
+
+  const today = startOfDay(new Date());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const latest = startOfDay(days[0].date);
+  // A streak only counts as running if the last study day is today or
+  // yesterday; anything older means it has already been broken.
+  let streak = 0;
+  if (latest.getTime() === today.getTime() || latest.getTime() === yesterday.getTime()) {
+    streak = 1;
+    let expected = new Date(latest);
+    for (let i = 1; i < days.length; i++) {
+      expected.setDate(expected.getDate() - 1);
+      if (startOfDay(days[i].date).getTime() !== expected.getTime()) break;
+      streak += 1;
+    }
+  }
+
+  await tx.user.update({
+    where: { id: userId },
+    data: { currentStreak: streak, lastStudyDate: latest },
+  });
 }

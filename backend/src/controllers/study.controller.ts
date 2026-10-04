@@ -29,3 +29,8 @@ export const submitReviewHandler = asyncHandler(async (req: Request, res: Respon
   const result = await studyService.submitReview(req.user!, req.body);
   res.status(201).json(result);
 });
+
+export const undoLastReviewHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await studyService.undoLastReview(req.user!);
+  res.json(result);
+});

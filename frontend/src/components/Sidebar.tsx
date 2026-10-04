@@ -11,6 +11,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: IconName }> = [
   { to: '/dashboard', label: 'Panel główny', icon: 'home' },
   { to: '/decks', label: 'Wszystkie zestawy', icon: 'layers' },
   { to: '/statistics', label: 'Statystyki', icon: 'chart' },
+  { to: '/settings', label: 'Ustawienia', icon: 'target' },
 ];
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>

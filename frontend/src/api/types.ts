@@ -16,6 +16,8 @@ export interface User {
   currentStreak: number;
   bestStreak: number;
   lastStudyDate: string | null;
+  /** Never-seen cards the scheduler may introduce per day (0 = none). */
+  dailyNewLimit?: number;
   createdAt?: string;
 }
 

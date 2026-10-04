@@ -54,3 +54,8 @@ export const meHandler = asyncHandler(async (req: Request, res: Response) => {
   const user = await authService.getMe(req.user!.id);
   res.json({ user });
 });
+
+export const updateSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const user = await authService.updateSettings(req.user!.id, { dailyNewLimit: req.body.dailyNewLimit });
+  res.json({ user });
+});
