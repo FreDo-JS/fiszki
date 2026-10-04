@@ -1,0 +1,38 @@
+# Reverse proxy dla wdrożenia na serwerze (usługa "proxy", profil "proxy").
+# Caddy sam załatwia certyfikat Let's Encrypt i odnawia go w tle — a HTTPS nie
+# jest tu ozdobą: ciasteczka sesji mają w produkcji flagę Secure, więc po
+# zwykłym HTTP logowanie nie utrzyma sesji.
+#
+# Jedna domena obsługuje całość: /api/* idzie do backendu, reszta do frontendu.
+# Dzięki temu frontend i API są tym samym originem, co upraszcza CORS i sprawia,
+# że ciasteczka SameSite=Lax działają bez żadnych wyjątków.
+
+{
+	# Pusty e-mail = Caddy użyje konta bez powiadomień o wygasających certyfikatach.
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:4000
+	}
+
+	# Sonda zdrowia backendu, przydatna do monitoringu z zewnątrz.
+	handle /health {
+		reverse_proxy backend:4000
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	header {
+		# HSTS: po pierwszej udanej wizycie przeglądarka sama wymusza HTTPS.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

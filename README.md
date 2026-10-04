@@ -112,10 +112,53 @@ cd backend && DATABASE_URL="postgresql://fiszki:<hasło>@localhost:5432/fiszki_t
 To samo robi CI przy każdym pushu — plus typecheck obu stron, build frontendu i budowa obrazów Dockera
 (patrz [.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
-### Wdrożenie na serwer
+## Wdrożenie na serwer (VPS z Dockerem)
 
-W `.env` podmień adresy na publiczne (`VITE_API_URL`, `CORS_ORIGIN`) i przebuduj frontend —
-`VITE_API_URL` jest wkompilowywane w bundle w czasie builda, a nie czytane przy starcie:
+### Sekrety
+
+Plik `.env` jest w `.gitignore`, więc **świeży klon na serwerze go nie ma** i compose celowo odmówi
+startu. To nie usterka — sekrety nigdy nie powinny jechać przez repozytorium. Wygeneruj je na miejscu:
+
+```bash
+git clone https://github.com/FreDo-JS/fiszki.git && cd fiszki && ./scripts/setup-env.sh --domain twoja-domena.pl
+```
+
+Skrypt tworzy `.env` z trzema losowymi sekretami (po 96 znaków hex), nadaje mu uprawnienia `600`
+i odmawia nadpisania istniejącego pliku — zmiana `POSTGRES_PASSWORD` rozjechałaby się z hasłem
+zapisanym w wolumenie bazy przy pierwszym starcie.
+
+Zasady, które warto utrzymać:
+
+- **Nie kopiuj lokalnego `.env` na serwer.** Każda maszyna ma własne sekrety, więc wyciek na jednej
+  nie dotyka drugiej.
+- Sekrety zna tylko serwer. Jeśli potrzebujesz kopii zapasowej, trzymaj ją w menedżerze haseł, nie w repo.
+- Rotacja kluczy JWT (`JWT_SECRET`, `JWT_REFRESH_SECRET`) jest bezpieczna w każdej chwili — wyloguje
+  tylko wszystkich użytkowników. Rotacja `POSTGRES_PASSWORD` wymaga też `ALTER USER` w bazie.
+
+### HTTPS jest wymagany, nie opcjonalny
+
+Ciasteczka sesji mają w trybie produkcyjnym flagę `Secure`, więc **po zwykłym HTTP logowanie przejdzie,
+ale sesja się nie utrzyma** — przeglądarka po cichu odrzuci ciasteczko. W repo jest gotowy reverse proxy
+(Caddy, automatyczny certyfikat Let's Encrypt), uruchamiany opcjonalnym profilem:
+
+```bash
+docker compose --profile proxy up -d --build
+```
+
+Caddy kieruje `/api/*` do backendu, resztę do frontendu, więc wszystko działa na jednym originie —
+CORS i `SameSite=Lax` przestają być problemem. Wymaga wolnych portów 80 i 443 oraz rekordu A domeny
+wskazującego na serwer. Bez profilu `proxy` nic się nie zmienia i aplikacja nadal chodzi na `localhost:8080`.
+
+Na koniec dane startowe (jednorazowo):
+
+```bash
+docker compose --profile seed run --rm seeder
+```
+
+### Zmiana adresów po wdrożeniu
+
+`VITE_API_URL` jest **wkompilowywane w bundle podczas budowy obrazu**, a nie czytane przy starcie —
+po każdej zmianie trzeba przebudować frontend:
 
 ```bash
 docker compose up -d --build
