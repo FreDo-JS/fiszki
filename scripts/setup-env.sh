@@ -6,13 +6,28 @@
 # the server instead of copying your local .env there: every machine should
 # have its own secrets, so a leak on one never affects the other.
 #
+# Można go wywołać z dowolnego katalogu — .env zawsze powstaje obok
+# docker-compose.yml:
 #   ./scripts/setup-env.sh --domain fiszki.example.com
 #   ./scripts/setup-env.sh --domain fiszki.example.com --api-domain api.fiszki.example.com
 #   ./scripts/setup-env.sh --local
 #
 set -eu
 
-ENV_FILE=".env"
+# .env musi powstać obok docker-compose.yml, a nie w katalogu, z którego akurat
+# wywołano skrypt — inaczej uruchomienie go z wnętrza scripts/ tworzy plik,
+# którego compose nigdy nie zobaczy. Ustalamy katalog projektu z położenia
+# samego skryptu.
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+PROJECT_ROOT="$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)"
+
+if [ ! -f "$PROJECT_ROOT/docker-compose.yml" ]; then
+  echo "Błąd: nie znalazłem docker-compose.yml w $PROJECT_ROOT." >&2
+  echo "Skrypt powinien leżeć w katalogu scripts/ wewnątrz repozytorium." >&2
+  exit 1
+fi
+
+ENV_FILE="$PROJECT_ROOT/.env"
 DOMAIN=""
 API_DOMAIN=""
 FORCE=0
@@ -147,9 +162,13 @@ echo
 echo "  frontend : ${FRONTEND_ORIGIN}"
 echo "  API      : ${API_URL}"
 echo
-echo "Następny krok:"
+echo "Następny krok — z katalogu projektu ($PROJECT_ROOT):"
 echo "  docker compose up -d --build"
 echo "  docker compose --profile seed run --rm seeder   # jednorazowo, dane startowe"
+echo
+echo "Masz własnego Traefika? Uzupełnij w .env TRAEFIK_NETWORK / TRAEFIK_ENTRYPOINT /"
+echo "TRAEFIK_CERTRESOLVER i uruchom z nakładką:"
+echo "  docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build"
 
 if [ "$LOCAL" -eq 0 ] && [ "$SCHEME" = "https" ]; then
   echo
