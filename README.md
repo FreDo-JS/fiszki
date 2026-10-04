@@ -1,3 +1,5 @@
+[![CI](https://github.com/FreDo-JS/fiszki/actions/workflows/ci.yml/badge.svg)](https://github.com/FreDo-JS/fiszki/actions/workflows/ci.yml)
+
 Fiszki - Bardzo chce nauczyć się słowek dlatego też utworzony został ten projekt przy użyciu
 -REACT
 -NODE
@@ -27,6 +29,17 @@ Zgodnie z SM-2 jakość poniżej 3 to **nieudane przypomnienie** — liczy się 
 i cofa fiszkę na początek harmonogramu. Udane powtórki idą ścieżką 1 dzień → 6 dni →
 `poprzedni odstęp × easeFactor`, przy czym ease jest przycięty do zakresu 1,3-3,2.
 Fiszka dostaje status „opanowana" dopiero po 3 kolejnych ocenach Dobrze/Łatwo i odstępie co najmniej 7 dni.
+
+### Tempo nauki i cofanie oceny
+
+**Dzienny limit nowych fiszek** (domyślnie 20, do zmiany w *Ustawieniach*) ogranicza, ile niewidzianych
+wcześniej fiszek aplikacja wprowadzi w ciągu dnia. Limit liczy się łącznie dla wszystkich zestawów, więc
+nie da się go obejść przeskakiwaniem między nimi. **Powtórek limit nie dotyczy** — przychodzą w terminie
+wyznaczonym przez SM-2, bo to praca, na którą już się zapisałeś. Wartość 0 wyłącza nowe fiszki.
+
+**Cofnięcie ostatniej oceny** (przycisk w sesji albo klawisz `Z`) odtwarza stan fiszki sprzed oceny co do
+daty następnej powtórki — każda ocena zapisuje pełną migawkę stanu. Razem z nią wycofywane są liczniki
+dnia, sesji i seria. Cofnąć można tylko ostatnią ocenę.
 
 ### Rodzaje fiszek
 
@@ -81,6 +94,23 @@ Wymagany jest tylko Docker (Docker Desktop na Windows/macOS, Docker Engine + plu
    ```
 
    `docker compose down -v` usuwa też wolumen z danymi bazy.
+
+## Testy
+
+Testy backendu wymagają działającego Postgresa i **czyszczą tabele przed każdym testem**, więc nigdy nie
+uruchamiaj ich na bazie z prawdziwymi danymi. Przy wstawionym stacku najprościej użyć osobnej bazy w tym
+samym kontenerze:
+
+```bash
+docker compose exec db psql -U fiszki -d postgres -c "CREATE DATABASE fiszki_test OWNER fiszki;"
+```
+
+```bash
+cd backend && DATABASE_URL="postgresql://fiszki:<hasło>@localhost:5432/fiszki_test?schema=public" npx prisma migrate deploy && npm test
+```
+
+To samo robi CI przy każdym pushu — plus typecheck obu stron, build frontendu i budowa obrazów Dockera
+(patrz [.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
 ### Wdrożenie na serwer
 
