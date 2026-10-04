@@ -1,6 +1,11 @@
 export type Role = 'USER' | 'ADMIN';
 export type UserStatus = 'ACTIVE' | 'BLOCKED';
-export type Rating = 'AGAIN' | 'HARD' | 'GOOD';
+// Five grading buttons mapped onto SM-2's 0-5 quality scale by the backend
+// (AGAIN=0, HARD=1, OK=3, GOOD=4, EASY=5).
+export type Rating = 'AGAIN' | 'HARD' | 'OK' | 'GOOD' | 'EASY';
+export type CardType = 'VOCABULARY' | 'GRAMMAR' | 'TENSES';
+export type CardLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1';
+export type StudyMode = 'mixed' | 'review' | 'new';
 
 export interface User {
   id: string;
@@ -25,6 +30,10 @@ export interface Deck {
   owned: boolean;
   cardCount: number;
   dueCount: number;
+  /** Cards never shown by the scheduler - the pool for the "new" study mode. */
+  newCount: number;
+  /** Already-seen cards the scheduler brought back up today. */
+  reviewCount: number;
   masteredCount: number;
   masteryPercent: number;
   lastStudiedAt?: string | null;
@@ -39,8 +48,11 @@ export interface Card {
   meaningEn: string | null;
   translationPl: string | null;
   exampleSentence: string | null;
+  explanation: string | null;
   pronunciationIpa: string | null;
   partOfSpeech: string | null;
+  type: CardType;
+  level: CardLevel;
   repetitions: number;
   intervalDays: number;
   easeFactor: number;
@@ -114,4 +126,18 @@ export interface AdminDashboard {
   totalCards: number;
   totalReviews: number;
   reviewsLast7Days: number;
+}
+
+export interface BreakdownRow {
+  key: string;
+  total: number;
+  mastered: number;
+  due: number;
+  new: number;
+  masteryPercent: number;
+}
+
+export interface Breakdowns {
+  byType: BreakdownRow[];
+  byLevel: BreakdownRow[];
 }

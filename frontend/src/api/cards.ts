@@ -1,5 +1,5 @@
 import { api } from './client';
-import { Card, PaginatedResult } from './types';
+import { Card, CardLevel, CardType, PaginatedResult } from './types';
 
 export interface CardInput {
   deckId?: string;
@@ -7,12 +7,23 @@ export interface CardInput {
   meaningEn?: string;
   translationPl?: string;
   exampleSentence?: string;
+  explanation?: string;
   pronunciationIpa?: string;
   partOfSpeech?: string;
+  type?: CardType;
+  level?: CardLevel;
   tags?: string[];
 }
 
-export async function listCards(params: { deckId?: string; search?: string; tag?: string; page?: number; pageSize?: number }) {
+export async function listCards(params: {
+  deckId?: string;
+  search?: string;
+  tag?: string;
+  type?: CardType;
+  level?: CardLevel;
+  page?: number;
+  pageSize?: number;
+}) {
   const { data } = await api.get<PaginatedResult<Card>>('/cards', { params });
   return data;
 }

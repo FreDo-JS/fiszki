@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { CardLevel, CardType, Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { ApiError } from '../utils/ApiError';
 import { stripHtml } from '../utils/sanitize';
@@ -47,7 +47,15 @@ export async function getCard(user: DeckAuthContext, id: string) {
 
 export async function listCards(
   user: DeckAuthContext,
-  filters: { deckId?: string; search?: string; tag?: string; page: number; pageSize: number }
+  filters: {
+    deckId?: string;
+    search?: string;
+    tag?: string;
+    type?: CardType;
+    level?: CardLevel;
+    page: number;
+    pageSize: number;
+  }
 ) {
   if (filters.deckId) {
     const deck = await getDeckOrThrow(filters.deckId);
@@ -63,10 +71,13 @@ export async function listCards(
             { translationPl: { contains: filters.search, mode: 'insensitive' } },
             { meaningEn: { contains: filters.search, mode: 'insensitive' } },
             { exampleSentence: { contains: filters.search, mode: 'insensitive' } },
+            { explanation: { contains: filters.search, mode: 'insensitive' } },
           ],
         }
       : {}),
     ...(filters.tag ? { tags: { some: { tag: { name: filters.tag } } } } : {}),
+    ...(filters.type ? { type: filters.type } : {}),
+    ...(filters.level ? { level: filters.level } : {}),
   };
 
   const [items, total] = await Promise.all([
@@ -94,8 +105,11 @@ export interface CardInput {
   meaningEn?: string;
   translationPl?: string;
   exampleSentence?: string;
+  explanation?: string;
   pronunciationIpa?: string;
   partOfSpeech?: string;
+  type?: CardType;
+  level?: CardLevel;
   tags?: string[];
 }
 
@@ -113,8 +127,11 @@ export async function createCard(user: DeckAuthContext, deckId: string, input: C
       meaningEn: stripHtml(input.meaningEn) ?? null,
       translationPl: stripHtml(input.translationPl) ?? null,
       exampleSentence: stripHtml(input.exampleSentence) ?? null,
+      explanation: stripHtml(input.explanation) ?? null,
       pronunciationIpa: stripHtml(input.pronunciationIpa) ?? null,
       partOfSpeech: stripHtml(input.partOfSpeech) ?? null,
+      type: input.type ?? 'VOCABULARY',
+      level: input.level ?? 'A1',
       repetitions: srs.repetitions,
       intervalDays: srs.intervalDays,
       easeFactor: srs.easeFactor,
@@ -147,8 +164,11 @@ export async function updateCard(user: DeckAuthContext, id: string, input: Parti
       ...(input.meaningEn !== undefined ? { meaningEn: stripHtml(input.meaningEn) ?? null } : {}),
       ...(input.translationPl !== undefined ? { translationPl: stripHtml(input.translationPl) ?? null } : {}),
       ...(input.exampleSentence !== undefined ? { exampleSentence: stripHtml(input.exampleSentence) ?? null } : {}),
+      ...(input.explanation !== undefined ? { explanation: stripHtml(input.explanation) ?? null } : {}),
       ...(input.pronunciationIpa !== undefined ? { pronunciationIpa: stripHtml(input.pronunciationIpa) ?? null } : {}),
       ...(input.partOfSpeech !== undefined ? { partOfSpeech: stripHtml(input.partOfSpeech) ?? null } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.level !== undefined ? { level: input.level } : {}),
     },
     include: cardWithTags,
   });

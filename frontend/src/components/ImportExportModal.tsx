@@ -87,7 +87,8 @@ export function ImportExportModal({ open, onClose, deckId, deckName, onImported 
         <div className="flex flex-col gap-3">
           <p className="text-sm text-ink-muted">
             Wklej dane CSV lub JSON, albo wybierz plik. Wymagana kolumna: <code className="rounded bg-surface-subtle px-1 py-0.5 text-xs">word</code>. Opcjonalne:
-            meaningEn, translationPl, exampleSentence, pronunciationIpa, partOfSpeech, tags.
+            meaningEn, translationPl, exampleSentence, explanation, pronunciationIpa, partOfSpeech, type
+            (VOCABULARY / GRAMMAR / TENSES), level (A1-C1), tags.
           </p>
           <input ref={fileRef} type="file" accept=".csv,.json" onChange={handleFile} className="text-sm text-ink-muted" />
           <div className="flex gap-2 text-sm">

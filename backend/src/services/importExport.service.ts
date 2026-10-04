@@ -8,19 +8,49 @@ import { initialSrsState } from './sm2.service';
 
 const MAX_IMPORT_ROWS = 2000;
 
+// `type` and `level` are accepted in any casing and fall back to the schema
+// defaults, so a CSV exported before these columns existed still imports.
+const cardTypeCell = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .pipe(z.enum(['VOCABULARY', 'GRAMMAR', 'TENSES']))
+  .catch('VOCABULARY');
+
+const cardLevelCell = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .pipe(z.enum(['A1', 'A2', 'B1', 'B2', 'C1']))
+  .catch('A1');
+
 const importRowSchema = z.object({
   word: z.string().trim().min(1).max(120),
   meaningEn: z.string().trim().max(1000).optional().default(''),
   translationPl: z.string().trim().max(500).optional().default(''),
   exampleSentence: z.string().trim().max(1000).optional().default(''),
+  explanation: z.string().trim().max(1000).optional().default(''),
   pronunciationIpa: z.string().trim().max(200).optional().default(''),
   partOfSpeech: z.string().trim().max(40).optional().default(''),
+  type: cardTypeCell.optional().default('VOCABULARY'),
+  level: cardLevelCell.optional().default('A1'),
   tags: z.string().trim().max(300).optional().default(''),
 });
 
 const importPayloadSchema = z.array(importRowSchema).max(MAX_IMPORT_ROWS);
 
-const CSV_HEADERS = ['word', 'meaningEn', 'translationPl', 'exampleSentence', 'pronunciationIpa', 'partOfSpeech', 'tags'];
+const CSV_HEADERS = [
+  'word',
+  'meaningEn',
+  'translationPl',
+  'exampleSentence',
+  'explanation',
+  'pronunciationIpa',
+  'partOfSpeech',
+  'type',
+  'level',
+  'tags',
+];
 
 export interface ImportResult {
   imported: number;
@@ -38,8 +68,11 @@ function rowsFromCsv(content: string) {
     meaningEn: indexOf('meaningEn'),
     translationPl: indexOf('translationPl'),
     exampleSentence: indexOf('exampleSentence'),
+    explanation: indexOf('explanation'),
     pronunciationIpa: indexOf('pronunciationIpa'),
     partOfSpeech: indexOf('partOfSpeech'),
+    type: indexOf('type'),
+    level: indexOf('level'),
     tags: indexOf('tags'),
   };
   if (idx.word === -1) {
@@ -50,8 +83,11 @@ function rowsFromCsv(content: string) {
     meaningEn: idx.meaningEn !== -1 ? cols[idx.meaningEn] ?? '' : '',
     translationPl: idx.translationPl !== -1 ? cols[idx.translationPl] ?? '' : '',
     exampleSentence: idx.exampleSentence !== -1 ? cols[idx.exampleSentence] ?? '' : '',
+    explanation: idx.explanation !== -1 ? cols[idx.explanation] ?? '' : '',
     pronunciationIpa: idx.pronunciationIpa !== -1 ? cols[idx.pronunciationIpa] ?? '' : '',
     partOfSpeech: idx.partOfSpeech !== -1 ? cols[idx.partOfSpeech] ?? '' : '',
+    type: idx.type !== -1 ? cols[idx.type] ?? '' : '',
+    level: idx.level !== -1 ? cols[idx.level] ?? '' : '',
     tags: idx.tags !== -1 ? cols[idx.tags] ?? '' : '',
   }));
 }
@@ -133,8 +169,11 @@ export async function importCards(
           meaningEn: stripHtml(row.meaningEn) ?? null,
           translationPl: stripHtml(row.translationPl) ?? null,
           exampleSentence: stripHtml(row.exampleSentence) ?? null,
+          explanation: stripHtml(row.explanation) ?? null,
           pronunciationIpa: stripHtml(row.pronunciationIpa) ?? null,
           partOfSpeech: stripHtml(row.partOfSpeech) ?? null,
+          type: row.type,
+          level: row.level,
           repetitions: srs.repetitions,
           intervalDays: srs.intervalDays,
           easeFactor: srs.easeFactor,
@@ -165,8 +204,11 @@ export async function exportCards(user: DeckAuthContext, deckId: string, format:
     meaningEn: c.meaningEn ?? '',
     translationPl: c.translationPl ?? '',
     exampleSentence: c.exampleSentence ?? '',
+    explanation: c.explanation ?? '',
     pronunciationIpa: c.pronunciationIpa ?? '',
     partOfSpeech: c.partOfSpeech ?? '',
+    type: c.type,
+    level: c.level,
     tags: c.tags.map((t) => t.tag.name).join(','),
   }));
 

@@ -20,10 +20,28 @@ enum UserStatus {
   BLOCKED
 }
 
+// Five grading buttons mapped onto SM-2's original 0-5 quality scale
+// (AGAIN=0, HARD=1, OK=3, GOOD=4, EASY=5) — see services/sm2.service.ts
 enum ReviewRating {
   AGAIN
   HARD
+  OK
   GOOD
+  EASY
+}
+
+enum CardType {
+  VOCABULARY
+  GRAMMAR
+  TENSES
+}
+
+enum CardLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
 }
 
 model User {
@@ -93,14 +111,20 @@ model Card {
   deckId String
   deck   Deck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
 
+  // `word` is the card front: a single word for VOCABULARY, a rule or
+  // question prompt for GRAMMAR and TENSES.
   word             String  @db.VarChar(120)
   meaningEn        String? @db.VarChar(1000)
   translationPl    String? @db.VarChar(500)
   exampleSentence  String? @db.VarChar(1000)
+  explanation      String? @db.VarChar(1000)
   pronunciationIpa String? @db.VarChar(200)
   partOfSpeech     String? @db.VarChar(40)
   audioUrlUk       String? @db.VarChar(500)
   audioUrlUs       String? @db.VarChar(500)
+
+  type  CardType  @default(VOCABULARY)
+  level CardLevel @default(A1)
 
   // Spaced repetition (SM-2 inspired) state
   repetitions    Int       @default(0)
@@ -120,6 +144,8 @@ model Card {
   @@index([deckId])
   @@index([deckId, dueDate])
   @@index([deckId, mastered])
+  @@index([deckId, type])
+  @@index([deckId, level])
 }
 
 model Tag {
@@ -147,6 +173,8 @@ model Review {
   card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   rating ReviewRating
+  // The SM-2 quality (0-5) this rating mapped to at review time.
+  quality Int @default(0)
 
   prevInterval    Int
   newInterval     Int

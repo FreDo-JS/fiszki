@@ -23,3 +23,8 @@ export const getDeckProgressHandler = asyncHandler(async (req: Request, res: Res
   const decks = await statsService.getDeckProgress(req.user!.id);
   res.json({ decks });
 });
+
+export const getBreakdownsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const breakdowns = await statsService.getBreakdowns(req.user!.id);
+  res.json(breakdowns);
+});

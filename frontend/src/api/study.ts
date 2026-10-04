@@ -1,8 +1,19 @@
 import { api } from './client';
-import { Card, Rating } from './types';
+import { Card, CardLevel, CardType, Rating, StudyMode } from './types';
 
-export async function getDueQueue(deckId: string, limit = 20) {
-  const { data } = await api.get<{ total: number; cards: Card[] }>(`/study/${deckId}`, { params: { limit } });
+export interface DueQueueOptions {
+  limit?: number;
+  /** 'review' = only cards the scheduler brought back, 'new' = never studied. */
+  mode?: StudyMode;
+  type?: CardType;
+  level?: CardLevel;
+}
+
+export async function getDueQueue(deckId: string, options: DueQueueOptions = {}) {
+  const { limit = 20, mode, type, level } = options;
+  const { data } = await api.get<{ total: number; cards: Card[] }>(`/study/${deckId}`, {
+    params: { limit, mode, type, level },
+  });
   return data;
 }
 

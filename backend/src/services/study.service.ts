@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma';
 import { ApiError } from '../utils/ApiError';
-import { computeNextState, Rating } from './sm2.service';
+import { CardLevel, CardType, Prisma } from '@prisma/client';
+import { computeNextState, isPassingRating, qualityFor, Rating } from './sm2.service';
 import { DeckAuthContext, getDeckOrThrow } from './deck.service';
 
 function startOfDay(date: Date): Date {
@@ -27,17 +28,41 @@ async function getOwnedDeckOrThrow(user: DeckAuthContext, deckId: string) {
   return deck;
 }
 
-export async function getDueQueue(user: DeckAuthContext, deckId: string, limit: number) {
+// `review` drills only cards the scheduler has already seen and brought back
+// up, `new` only cards never studied before, and `mixed` (the default) keeps
+// the original behaviour: overdue first, then due today, then new.
+export type StudyMode = 'mixed' | 'review' | 'new';
+
+export interface DueQueueFilters {
+  limit: number;
+  mode?: StudyMode;
+  type?: CardType;
+  level?: CardLevel;
+}
+
+export async function getDueQueue(user: DeckAuthContext, deckId: string, filters: DueQueueFilters) {
   await getOwnedDeckOrThrow(user, deckId);
 
+  const { limit, mode = 'mixed' } = filters;
   const now = new Date();
   const today = startOfDay(now);
 
+  const taxonomy: Prisma.CardWhereInput = {
+    ...(filters.type ? { type: filters.type } : {}),
+    ...(filters.level ? { level: filters.level } : {}),
+  };
+
+  const dueWindow: Prisma.CardWhereInput =
+    mode === 'new'
+      ? { lastReviewedAt: null }
+      : mode === 'review'
+        ? { lastReviewedAt: { not: null }, dueDate: { lte: now } }
+        : { OR: [{ lastReviewedAt: null }, { dueDate: { lte: now } }] };
+
+  const baseWhere: Prisma.CardWhereInput = { deckId, ...taxonomy, ...dueWindow };
+
   const candidates = await prisma.card.findMany({
-    where: {
-      deckId,
-      OR: [{ lastReviewedAt: null }, { dueDate: { lte: now } }],
-    },
+    where: baseWhere,
     include: { tags: { include: { tag: true } } },
     orderBy: { dueDate: 'asc' },
     take: limit * 4,
@@ -55,11 +80,14 @@ export async function getDueQueue(user: DeckAuthContext, deckId: string, limit: 
     .slice(0, limit)
     .map((x) => x.card);
 
-  if (queue.length < limit) {
+  // Only the default mode studies ahead by padding with cards that aren't due
+  // yet. In the explicit review/new modes an empty queue is a meaningful
+  // answer ("nothing to repeat today"), so padding would be misleading.
+  if (mode === 'mixed' && queue.length < limit) {
     const remaining = limit - queue.length;
     const excludeIds = queue.map((c) => c.id);
     const rest = await prisma.card.findMany({
-      where: { deckId, id: { notIn: excludeIds.length ? excludeIds : undefined }, dueDate: { gt: now } },
+      where: { deckId, ...taxonomy, id: { notIn: excludeIds.length ? excludeIds : undefined }, dueDate: { gt: now } },
       include: { tags: { include: { tag: true } } },
       orderBy: { dueDate: 'asc' },
       take: remaining,
@@ -67,9 +95,7 @@ export async function getDueQueue(user: DeckAuthContext, deckId: string, limit: 
     queue = [...queue, ...rest];
   }
 
-  const total = await prisma.card.count({
-    where: { deckId, OR: [{ lastReviewedAt: null }, { dueDate: { lte: now } }] },
-  });
+  const total = await prisma.card.count({ where: baseWhere });
 
   return {
     total,
@@ -116,7 +142,9 @@ export async function submitReview(user: DeckAuthContext, input: SubmitReviewInp
     now
   );
 
-  const correct = input.rating !== 'AGAIN';
+  // "Correct" follows SM-2: only a quality of 3 or more counts as recall,
+  // so both AGAIN (0) and HARD (1) are failures for stats and streaks.
+  const correct = isPassingRating(input.rating);
 
   const [updatedCard, review] = await prisma.$transaction(async (tx) => {
     const updatedCard = await tx.card.update({
@@ -137,6 +165,7 @@ export async function submitReview(user: DeckAuthContext, input: SubmitReviewInp
         userId: user.id,
         cardId: card.id,
         rating: input.rating,
+        quality: qualityFor(input.rating),
         prevInterval: card.intervalDays,
         newInterval: nextState.intervalDays,
         prevEaseFactor: card.easeFactor,

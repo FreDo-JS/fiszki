@@ -1,3 +1,4 @@
+import { CardLevel, CardType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 
 function startOfDay(date: Date): Date {
@@ -40,7 +41,11 @@ export async function getOverview(userId: string) {
   ]);
 
   const totalReviews = reviewAgg.reduce((sum, r) => sum + r._count._all, 0);
-  const incorrect = reviewAgg.find((r) => r.rating === 'AGAIN')?._count._all ?? 0;
+  // Mirrors sm2.service#isPassingRating: only quality >= 3 is a recall, so
+  // AGAIN (0) and HARD (1) both count against accuracy.
+  const incorrect = reviewAgg
+    .filter((r) => r.rating === 'AGAIN' || r.rating === 'HARD')
+    .reduce((sum, r) => sum + r._count._all, 0);
   const correct = totalReviews - incorrect;
   const accuracy = totalReviews > 0 ? Math.round((correct / totalReviews) * 100) : 0;
 
@@ -119,4 +124,78 @@ export async function getDeckProgress(userId: string) {
       masteryPercent: total > 0 ? Math.round((masteredCount / total) * 100) : 0,
     };
   });
+}
+
+const CARD_TYPES: CardType[] = ['VOCABULARY', 'GRAMMAR', 'TENSES'];
+const CARD_LEVELS: CardLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1'];
+
+export interface BreakdownRow {
+  key: string;
+  total: number;
+  mastered: number;
+  due: number;
+  new: number;
+  masteryPercent: number;
+}
+
+/**
+ * Per-category progress for the dashboard: one row per card type and one per
+ * CEFR level, always including empty categories so the UI can render a
+ * stable set of bars instead of a list that changes shape as cards are added.
+ */
+export async function getBreakdowns(userId: string) {
+  const now = new Date();
+  const owned = { deck: { ownerId: userId } };
+
+  const [byTypeTotal, byTypeMastered, byTypeDue, byTypeNew, byLevelTotal, byLevelMastered, byLevelDue, byLevelNew] =
+    await Promise.all([
+      prisma.card.groupBy({ by: ['type'], where: owned, _count: { _all: true } }),
+      prisma.card.groupBy({ by: ['type'], where: { ...owned, mastered: true }, _count: { _all: true } }),
+      prisma.card.groupBy({ by: ['type'], where: { ...owned, dueDate: { lte: now } }, _count: { _all: true } }),
+      prisma.card.groupBy({ by: ['type'], where: { ...owned, lastReviewedAt: null }, _count: { _all: true } }),
+      prisma.card.groupBy({ by: ['level'], where: owned, _count: { _all: true } }),
+      prisma.card.groupBy({ by: ['level'], where: { ...owned, mastered: true }, _count: { _all: true } }),
+      prisma.card.groupBy({ by: ['level'], where: { ...owned, dueDate: { lte: now } }, _count: { _all: true } }),
+      prisma.card.groupBy({ by: ['level'], where: { ...owned, lastReviewedAt: null }, _count: { _all: true } }),
+    ]);
+
+  const toMap = <T extends string>(rows: Array<{ _count: { _all: number } } & Record<string, unknown>>, field: string) =>
+    new Map<T, number>(rows.map((r) => [r[field] as T, r._count._all]));
+
+  const build = <T extends string>(
+    keys: T[],
+    totals: Map<T, number>,
+    mastered: Map<T, number>,
+    due: Map<T, number>,
+    fresh: Map<T, number>
+  ): BreakdownRow[] =>
+    keys.map((key) => {
+      const total = totals.get(key) ?? 0;
+      const masteredCount = mastered.get(key) ?? 0;
+      return {
+        key,
+        total,
+        mastered: masteredCount,
+        due: due.get(key) ?? 0,
+        new: fresh.get(key) ?? 0,
+        masteryPercent: total > 0 ? Math.round((masteredCount / total) * 100) : 0,
+      };
+    });
+
+  return {
+    byType: build(
+      CARD_TYPES,
+      toMap<CardType>(byTypeTotal, 'type'),
+      toMap<CardType>(byTypeMastered, 'type'),
+      toMap<CardType>(byTypeDue, 'type'),
+      toMap<CardType>(byTypeNew, 'type')
+    ),
+    byLevel: build(
+      CARD_LEVELS,
+      toMap<CardLevel>(byLevelTotal, 'level'),
+      toMap<CardLevel>(byLevelMastered, 'level'),
+      toMap<CardLevel>(byLevelDue, 'level'),
+      toMap<CardLevel>(byLevelNew, 'level')
+    ),
+  };
 }

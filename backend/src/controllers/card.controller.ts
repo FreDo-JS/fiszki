@@ -1,17 +1,20 @@
 import { Request, Response } from 'express';
+import { CardLevel, CardType } from '@prisma/client';
 import { asyncHandler } from '../utils/asyncHandler';
 import * as cardService from '../services/card.service';
 import { generateCardFields } from '../services/dictionary.service';
 
 export const listCardsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { deckId, search, tag, page, pageSize } = req.query as unknown as {
+  const { deckId, search, tag, type, level, page, pageSize } = req.query as unknown as {
     deckId?: string;
     search?: string;
     tag?: string;
+    type?: CardType;
+    level?: CardLevel;
     page: number;
     pageSize: number;
   };
-  const result = await cardService.listCards(req.user!, { deckId, search, tag, page, pageSize });
+  const result = await cardService.listCards(req.user!, { deckId, search, tag, type, level, page, pageSize });
   res.json(result);
 });
 

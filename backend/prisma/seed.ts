@@ -1,9 +1,10 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { PrismaClient } from '@prisma/client';
+import { CardLevel, PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/utils/password';
 import { initialSrsState } from '../src/services/sm2.service';
+import { STARTER_DECKS } from './seed-data/starter-cards';
 
 const prisma = new PrismaClient();
 
@@ -119,6 +120,10 @@ async function main() {
         exampleSentence: w.exampleSentence,
         pronunciationIpa: w.pronunciationIpa,
         partOfSpeech: w.partOfSpeech,
+        // The CEFR band is also kept as a tag (below) for backwards
+        // compatibility, but `level` is what the filters and dashboard read.
+        type: 'VOCABULARY' as const,
+        level: level.toUpperCase() as CardLevel,
         repetitions: srs.repetitions,
         intervalDays: srs.intervalDays,
         easeFactor: srs.easeFactor,
@@ -135,6 +140,58 @@ async function main() {
         { cardId, tagId: groupTagId },
       ]),
     });
+  }
+
+  console.log('');
+  console.log('Tworzenie startowych zestawów: słownictwo, gramatyka, czasy...');
+  const starterTagNames = ['start', 'slownictwo', 'gramatyka', 'czasy'];
+  await prisma.tag.createMany({ data: starterTagNames.map((name) => ({ name })), skipDuplicates: true });
+  const starterTags = await prisma.tag.findMany({ where: { name: { in: [...starterTagNames, ...levelNames] } } });
+  const starterTagId = new Map(starterTags.map((t) => [t.name, t.id]));
+  const TYPE_TAG: Record<string, string> = { VOCABULARY: 'slownictwo', GRAMMAR: 'gramatyka', TENSES: 'czasy' };
+
+  for (const starter of STARTER_DECKS) {
+    const deck = await prisma.deck.create({
+      data: {
+        name: starter.name,
+        description: starter.description,
+        color: starter.color,
+        isPublic: true,
+        ownerId: admin.id,
+      },
+    });
+
+    const srs = initialSrsState();
+    const cardIds = starter.cards.map(() => randomUUID());
+
+    await prisma.card.createMany({
+      data: starter.cards.map((c, i) => ({
+        id: cardIds[i],
+        deckId: deck.id,
+        word: c.word,
+        meaningEn: c.meaningEn,
+        translationPl: c.translationPl,
+        exampleSentence: c.exampleSentence,
+        explanation: c.explanation,
+        partOfSpeech: c.partOfSpeech,
+        type: starter.type,
+        level: c.level as CardLevel,
+        repetitions: srs.repetitions,
+        intervalDays: srs.intervalDays,
+        easeFactor: srs.easeFactor,
+        lapses: srs.lapses,
+        mastered: srs.mastered,
+      })),
+    });
+
+    await prisma.cardTag.createMany({
+      data: starter.cards.flatMap((c, i) => {
+        const tagIds = [starterTagId.get('start'), starterTagId.get(TYPE_TAG[starter.type]), starterTagId.get(c.level.toLowerCase())];
+        return tagIds.filter((id): id is string => Boolean(id)).map((tagId) => ({ cardId: cardIds[i], tagId }));
+      }),
+    });
+
+    console.log(`  ${deck.name}: ${starter.cards.length} fiszek`);
   }
 
   const totalCards = await prisma.card.count();

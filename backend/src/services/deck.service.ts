@@ -39,7 +39,7 @@ export async function listDecks(user: DeckAuthContext, filters: { search?: strin
   const deckIds = decks.map((d) => d.id);
   const now = new Date();
 
-  const [totalCounts, dueCounts, masteredCounts, lastSessions] = await Promise.all([
+  const [totalCounts, dueCounts, masteredCounts, newCounts, reviewCounts, lastSessions] = await Promise.all([
     prisma.card.groupBy({ by: ['deckId'], where: { deckId: { in: deckIds } }, _count: { _all: true } }),
     prisma.card.groupBy({
       by: ['deckId'],
@@ -49,6 +49,20 @@ export async function listDecks(user: DeckAuthContext, filters: { search?: strin
     prisma.card.groupBy({
       by: ['deckId'],
       where: { deckId: { in: deckIds }, mastered: true },
+      _count: { _all: true },
+    }),
+    // Cards the scheduler has never shown — what the "learn new" mode draws from.
+    prisma.card.groupBy({
+      by: ['deckId'],
+      where: { deckId: { in: deckIds }, lastReviewedAt: null },
+      _count: { _all: true },
+    }),
+    // Already-seen cards the scheduler brought back up. dueCount alone can't
+    // drive the "review" mode, because a brand new card is also due (its
+    // dueDate defaults to the moment it was created).
+    prisma.card.groupBy({
+      by: ['deckId'],
+      where: { deckId: { in: deckIds }, lastReviewedAt: { not: null }, dueDate: { lte: now } },
       _count: { _all: true },
     }),
     prisma.studySession.groupBy({
@@ -61,6 +75,8 @@ export async function listDecks(user: DeckAuthContext, filters: { search?: strin
   const totalMap = new Map(totalCounts.map((c) => [c.deckId, c._count._all]));
   const dueMap = new Map(dueCounts.map((c) => [c.deckId, c._count._all]));
   const masteredMap = new Map(masteredCounts.map((c) => [c.deckId, c._count._all]));
+  const newMap = new Map(newCounts.map((c) => [c.deckId, c._count._all]));
+  const reviewMap = new Map(reviewCounts.map((c) => [c.deckId, c._count._all]));
   const lastStudiedMap = new Map(lastSessions.map((s) => [s.deckId as string, s._max.startedAt]));
 
   return decks.map((deck) => {
@@ -71,6 +87,8 @@ export async function listDecks(user: DeckAuthContext, filters: { search?: strin
       owned: deck.ownerId === user.id,
       cardCount,
       dueCount: dueMap.get(deck.id) ?? 0,
+      newCount: newMap.get(deck.id) ?? 0,
+      reviewCount: reviewMap.get(deck.id) ?? 0,
       masteredCount,
       masteryPercent: cardCount > 0 ? Math.round((masteredCount / cardCount) * 100) : 0,
       lastStudiedAt: lastStudiedMap.get(deck.id) ?? null,
@@ -83,10 +101,12 @@ export async function getDeckDetail(user: DeckAuthContext, id: string) {
   if (!canRead(user, deck)) throw ApiError.forbidden('Nie masz dostępu do tego zestawu');
 
   const now = new Date();
-  const [cardCount, dueCount, masteredCount] = await Promise.all([
+  const [cardCount, dueCount, masteredCount, newCount, reviewCount] = await Promise.all([
     prisma.card.count({ where: { deckId: id } }),
     prisma.card.count({ where: { deckId: id, dueDate: { lte: now } } }),
     prisma.card.count({ where: { deckId: id, mastered: true } }),
+    prisma.card.count({ where: { deckId: id, lastReviewedAt: null } }),
+    prisma.card.count({ where: { deckId: id, lastReviewedAt: { not: null }, dueDate: { lte: now } } }),
   ]);
 
   return {
@@ -94,6 +114,8 @@ export async function getDeckDetail(user: DeckAuthContext, id: string) {
     owned: deck.ownerId === user.id,
     cardCount,
     dueCount,
+    newCount,
+    reviewCount,
     masteredCount,
     masteryPercent: cardCount > 0 ? Math.round((masteredCount / cardCount) * 100) : 0,
   };

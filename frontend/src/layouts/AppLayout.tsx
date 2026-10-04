@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
+import { BottomNav } from '../components/BottomNav';
 import { GlobalSearch } from '../components/GlobalSearch';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../context/AuthContext';
@@ -88,12 +89,15 @@ export function AppLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
+        {/* pb-24 on mobile keeps the last row clear of the bottom tab bar. */}
+        <main className="flex-1 overflow-y-auto px-4 pb-24 pt-6 md:px-8 md:pb-8">
           <div className="mx-auto w-full max-w-6xl">
             <Outlet />
           </div>
         </main>
       </div>
+
+      <BottomNav />
     </div>
   );
 }

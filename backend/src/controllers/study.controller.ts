@@ -1,10 +1,17 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
+import { CardLevel, CardType } from '@prisma/client';
 import * as studyService from '../services/study.service';
 
 export const getDueQueueHandler = asyncHandler(async (req: Request, res: Response) => {
-  const limit = Number(req.query.limit ?? 20);
-  const result = await studyService.getDueQueue(req.user!, req.params.deckId, limit);
+  // The request has already been through the zod schema, so these casts only
+  // restate what validation guaranteed.
+  const result = await studyService.getDueQueue(req.user!, req.params.deckId, {
+    limit: Number(req.query.limit ?? 20),
+    mode: (req.query.mode as studyService.StudyMode | undefined) ?? 'mixed',
+    type: req.query.type as CardType | undefined,
+    level: req.query.level as CardLevel | undefined,
+  });
   res.json(result);
 });
 

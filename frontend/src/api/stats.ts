@@ -1,5 +1,5 @@
 import { api } from './client';
-import { DailyStat, DeckProgress, StatsOverview } from './types';
+import { Breakdowns, DailyStat, DeckProgress, StatsOverview } from './types';
 
 export async function getOverview() {
   const { data } = await api.get<{ overview: StatsOverview }>('/statistics');
@@ -19,4 +19,9 @@ export async function getCalendar(days = 365) {
 export async function getDeckProgress() {
   const { data } = await api.get<{ decks: DeckProgress[] }>('/progress');
   return data.decks;
+}
+
+export async function getBreakdowns() {
+  const { data } = await api.get<Breakdowns>('/statistics/breakdowns');
+  return data;
 }

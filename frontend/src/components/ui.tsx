@@ -9,21 +9,24 @@ export function Button({
   children,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'teal' | 'success';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }) {
   return (
     <button
       className={clsx(
-        'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]',
+        'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]',
         variant === 'primary' && 'bg-accent text-white hover:brightness-110 shadow-subtle',
         variant === 'secondary' && 'bg-surface-raised border border-border text-ink hover:bg-surface-subtle',
         variant === 'ghost' && 'text-ink-muted hover:bg-surface-raised hover:text-ink',
         variant === 'danger' && 'bg-danger text-white hover:brightness-110',
-        size === 'sm' && 'px-3 py-1.5 text-sm',
-        size === 'md' && 'px-4 py-2.5 text-sm',
-        size === 'lg' && 'px-6 py-3 text-base',
+        variant === 'teal' && 'bg-secondary text-white hover:brightness-110 shadow-subtle',
+        variant === 'success' && 'bg-success text-white hover:brightness-110 shadow-subtle',
+        // Every size keeps a 44px-tall hit area, the WCAG 2.5.5 target size.
+        size === 'sm' && 'min-h-touch px-3 py-1.5 text-sm',
+        size === 'md' && 'min-h-touch px-4 py-2.5 text-sm',
+        size === 'lg' && 'min-h-[3rem] px-6 py-3 text-base',
         className
       )}
       disabled={props.disabled || isLoading}
@@ -41,7 +44,7 @@ export function Input({ label, error, className, ...props }: React.InputHTMLAttr
       {label && <span className="mb-1.5 block text-sm font-medium text-ink-muted">{label}</span>}
       <input
         className={clsx(
-          'w-full rounded-xl border bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none transition-colors',
+          'min-h-touch w-full rounded-xl border bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint outline-none transition-colors',
           'focus:border-accent focus:ring-2 focus:ring-accent/20',
           error ? 'border-danger' : 'border-border',
           className
@@ -71,7 +74,38 @@ export function TextArea({ label, error, className, ...props }: React.TextareaHT
   );
 }
 
-export function Badge({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'success' | 'warning' | 'danger' | 'accent' }) {
+export function Select({
+  label,
+  className,
+  children,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
+  return (
+    <label className="block">
+      {label && <span className="mb-1.5 block text-sm font-medium text-ink-muted">{label}</span>}
+      <select
+        className={clsx(
+          'min-h-touch w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-ink outline-none transition-colors',
+          'focus:border-accent focus:ring-2 focus:ring-accent/20',
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+export function Badge({
+  children,
+  tone = 'default',
+  className,
+}: {
+  children: React.ReactNode;
+  tone?: 'default' | 'success' | 'warning' | 'danger' | 'accent' | 'teal';
+  className?: string;
+}) {
   return (
     <span
       className={clsx(
@@ -80,7 +114,9 @@ export function Badge({ children, tone = 'default' }: { children: React.ReactNod
         tone === 'success' && 'bg-success/10 text-success',
         tone === 'warning' && 'bg-warning/10 text-warning',
         tone === 'danger' && 'bg-danger/10 text-danger',
-        tone === 'accent' && 'bg-accent-soft text-accent'
+        tone === 'accent' && 'bg-accent-soft text-accent',
+        tone === 'teal' && 'bg-secondary-soft text-secondary',
+        className
       )}
     >
       {children}
@@ -109,13 +145,88 @@ export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   );
 }
 
-export function ProgressBar({ value, tone = 'accent' }: { value: number; tone?: 'accent' | 'success' }) {
+export function ProgressBar({
+  value,
+  tone = 'accent',
+  size = 'md',
+  label,
+}: {
+  value: number;
+  tone?: 'accent' | 'success' | 'teal' | 'warning';
+  size?: 'sm' | 'md';
+  label?: string;
+}) {
+  const pct = Math.min(100, Math.max(0, value));
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-subtle">
+    <div
+      className={clsx('w-full overflow-hidden rounded-full bg-surface-subtle', size === 'sm' ? 'h-1.5' : 'h-2')}
+      role="progressbar"
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={label}
+    >
       <div
-        className={clsx('h-full rounded-full transition-all duration-500', tone === 'accent' ? 'bg-accent' : 'bg-success')}
-        style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+        className={clsx(
+          'h-full rounded-full transition-all duration-500 ease-out',
+          tone === 'accent' && 'bg-accent',
+          tone === 'success' && 'bg-success',
+          tone === 'teal' && 'bg-secondary',
+          tone === 'warning' && 'bg-warning'
+        )}
+        style={{ width: pct + '%' }}
       />
+    </div>
+  );
+}
+
+/**
+ * Horizontal chip picker used by the type / level / mode filters. Built from
+ * real radio inputs so it stays keyboard- and screen-reader-navigable, with
+ * the chip styling moved onto the labels.
+ */
+export function ChipGroup<T extends string>({
+  name,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string; count?: number }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <label
+            key={opt.value}
+            className={clsx(
+              'inline-flex min-h-touch cursor-pointer select-none items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors',
+              active
+                ? 'border-accent bg-accent text-white shadow-subtle'
+                : 'border-border bg-surface-raised text-ink-muted hover:border-accent/40 hover:text-ink'
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={opt.value}
+              checked={active}
+              onChange={() => onChange(opt.value)}
+              className="sr-only"
+            />
+            {opt.label}
+            {opt.count !== undefined && (
+              <span className={clsx('text-xs', active ? 'text-white/80' : 'text-ink-faint')}>{opt.count}</span>
+            )}
+          </label>
+        );
+      })}
     </div>
   );
 }

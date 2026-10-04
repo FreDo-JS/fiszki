@@ -4,6 +4,14 @@ import * as decksApi from '../api/decks';
 import * as cardsApi from '../api/cards';
 import { Card as CardType, Deck } from '../api/types';
 import { Badge, Button, EmptyState, Input, ProgressBar, Skeleton } from '../components/ui';
+import {
+  FilterRow,
+  LevelFilter,
+  LevelFilterValue,
+  TypeFilter,
+  TypeFilterValue,
+} from '../components/CardFilters';
+import { CARD_TYPE_LABEL, CARD_TYPE_TONE } from '../utils/cards';
 import { CardFormModal, CardFormValues } from '../components/CardFormModal';
 import { ImportExportModal } from '../components/ImportExportModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -25,6 +33,8 @@ export default function DeckDetailPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 350);
+  const [typeFilter, setTypeFilter] = useState<TypeFilterValue>('all');
+  const [levelFilter, setLevelFilter] = useState<LevelFilterValue>('all');
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(searchParams.get('card'));
 
@@ -43,7 +53,14 @@ export default function DeckDetailPage() {
     try {
       const [deckData, cardsData] = await Promise.all([
         decksApi.getDeck(id),
-        cardsApi.listCards({ deckId: id, search: debouncedSearch || undefined, page, pageSize }),
+        cardsApi.listCards({
+          deckId: id,
+          search: debouncedSearch || undefined,
+          type: typeFilter === 'all' ? undefined : typeFilter,
+          level: levelFilter === 'all' ? undefined : levelFilter,
+          page,
+          pageSize,
+        }),
       ]);
       setDeck(deckData);
       setCards(cardsData.items);
@@ -59,7 +76,7 @@ export default function DeckDetailPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, debouncedSearch, page]);
+  }, [id, debouncedSearch, typeFilter, levelFilter, page]);
 
   const handleCreateCard = async (values: CardFormValues) => {
     if (!id) return;
@@ -134,9 +151,18 @@ export default function DeckDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {canEdit && (
-            <Button onClick={() => navigate(`/study/${deck.id}`)} disabled={deck.dueCount === 0}>
-              {deck.dueCount > 0 ? `Rozpocznij naukę (${deck.dueCount})` : 'Brak fiszek do powtórki'}
-            </Button>
+            <>
+              <Button onClick={() => navigate(`/study/${deck.id}`)} disabled={deck.dueCount === 0}>
+                {deck.dueCount > 0 ? `Rozpocznij naukę (${deck.dueCount})` : 'Brak fiszek do powtórki'}
+              </Button>
+              <Button
+                variant="teal"
+                disabled={deck.newCount === 0}
+                onClick={() => navigate(`/study/${deck.id}?mode=new`)}
+              >
+                {deck.newCount > 0 ? `Tylko nowe (${deck.newCount})` : 'Brak nowych'}
+              </Button>
+            </>
           )}
           {!canEdit && (
             <Button
@@ -179,6 +205,29 @@ export default function DeckDetailPage() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FilterRow label="Rodzaj">
+            <TypeFilter
+              value={typeFilter}
+              onChange={(v) => {
+                setTypeFilter(v);
+                setPage(1);
+              }}
+            />
+          </FilterRow>
+          <FilterRow label="Poziom">
+            <LevelFilter
+              value={levelFilter}
+              onChange={(v) => {
+                setLevelFilter(v);
+                setPage(1);
+              }}
+            />
+          </FilterRow>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input placeholder="Szukaj fiszek w tym zestawie…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="sm:max-w-xs" />
         {canEdit && (
@@ -209,10 +258,12 @@ export default function DeckDetailPage() {
               onClick={() => setExpandedId(expandedId === card.id ? null : card.id)}
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-subtle transition-colors"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="font-medium text-ink">{card.word}</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="truncate font-medium text-ink">{card.word}</span>
+                <Badge tone={CARD_TYPE_TONE[card.type]}>{CARD_TYPE_LABEL[card.type]}</Badge>
+                <Badge>{card.level}</Badge>
                 {card.mastered && <Badge tone="success">Opanowana</Badge>}
-                {card.tags.slice(0, 3).map((t) => (
+                {card.tags.slice(0, 2).map((t) => (
                   <Badge key={t}>{t}</Badge>
                 ))}
               </div>
@@ -220,12 +271,13 @@ export default function DeckDetailPage() {
             </button>
             {expandedId === card.id && (
               <div className="border-t border-border px-4 py-3 flex flex-col gap-2 animate-fade-in">
-                {card.meaningEn && <p className="text-sm text-ink"><span className="font-medium text-ink-muted">Znaczenie:</span> {card.meaningEn}</p>}
-                {card.translationPl && <p className="text-sm text-ink"><span className="font-medium text-ink-muted">Tłumaczenie:</span> {card.translationPl}</p>}
-                {card.exampleSentence && <p className="text-sm italic text-ink-muted">"{card.exampleSentence}"</p>}
+                {card.meaningEn && <p className="text-sm text-ink"><span className="font-medium text-ink-muted">{card.type === 'VOCABULARY' ? 'Znaczenie' : 'Budowa'}:</span> {card.meaningEn}</p>}
+                {card.translationPl && <p className="text-sm text-ink"><span className="font-medium text-ink-muted">Po polsku:</span> {card.translationPl}</p>}
+                {card.explanation && <p className="text-sm text-ink-muted"><span className="font-medium">Wyjaśnienie:</span> {card.explanation}</p>}
+                {card.exampleSentence && <p className="text-sm italic text-ink-muted">„{card.exampleSentence}”</p>}
                 {card.pronunciationIpa && <p className="text-sm text-ink-muted">{card.pronunciationIpa}</p>}
                 <div className="mt-1 flex items-center justify-between">
-                  <AudioButton word={card.word} size="sm" />
+                  {card.type === 'VOCABULARY' ? <AudioButton word={card.word} size="sm" /> : <span />}
                   {canEdit && (
                     <div className="flex gap-2">
                       <Button

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cardLevelSchema, cardTypeSchema } from './study.validator';
 
 const wordSchema = z.string().trim().min(1, 'Słówko jest wymagane').max(120);
 const optionalText = (max: number) => z.string().trim().max(max).optional();
@@ -10,8 +11,11 @@ export const createCardSchema = z.object({
     meaningEn: optionalText(1000),
     translationPl: optionalText(500),
     exampleSentence: optionalText(1000),
+    explanation: optionalText(1000),
     pronunciationIpa: optionalText(200),
     partOfSpeech: optionalText(40),
+    type: cardTypeSchema.default('VOCABULARY'),
+    level: cardLevelSchema.default('A1'),
     tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   }),
 });
@@ -23,8 +27,11 @@ export const updateCardSchema = z.object({
     meaningEn: optionalText(1000),
     translationPl: optionalText(500),
     exampleSentence: optionalText(1000),
+    explanation: optionalText(1000),
     pronunciationIpa: optionalText(200),
     partOfSpeech: optionalText(40),
+    type: cardTypeSchema.optional(),
+    level: cardLevelSchema.optional(),
     tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   }),
 });
@@ -38,6 +45,8 @@ export const listCardsQuerySchema = z.object({
     deckId: z.string().uuid().optional(),
     search: z.string().trim().max(200).optional(),
     tag: z.string().trim().max(40).optional(),
+    type: cardTypeSchema.optional(),
+    level: cardLevelSchema.optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
   }),

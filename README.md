@@ -7,6 +7,37 @@ Aby mieć dobre narzędzie do stworzenia sensownego pola do nauki
 
 Aktualny krok to wdrożenie na serwer i zdockerowanie całej aplikacji z Docker Compose
 
+## Jak działa nauka
+
+### Algorytm powtórek (SM-2)
+
+Terminy powtórek wyznacza klasyczny algorytm **SuperMemo 2** na oryginalnej skali jakości 0-5
+([backend/src/services/sm2.service.ts](backend/src/services/sm2.service.ts)). Po odsłonięciu odpowiedzi
+oceniasz ją jednym z pięciu przycisków (skróty `1`-`5`):
+
+| Przycisk | Jakość (q) | Co robi algorytm |
+| --- | --- | --- |
+| Nie pamiętam | 0 | zeruje postęp, fiszka wraca po ~10 min, ease -0,80 |
+| Ledwo | 1 | zeruje postęp, fiszka wraca po ~20 min, ease -0,54 |
+| Z trudem | 3 | zalicza, ale skraca odstęp (×0,8) i obniża ease o 0,14 |
+| Dobrze | 4 | pełny odstęp, ease bez zmian |
+| Łatwo | 5 | odstęp ×1,3, ease +0,10 |
+
+Zgodnie z SM-2 jakość poniżej 3 to **nieudane przypomnienie** — liczy się jako błąd w statystykach
+i cofa fiszkę na początek harmonogramu. Udane powtórki idą ścieżką 1 dzień → 6 dni →
+`poprzedni odstęp × easeFactor`, przy czym ease jest przycięty do zakresu 1,3-3,2.
+Fiszka dostaje status „opanowana" dopiero po 3 kolejnych ocenach Dobrze/Łatwo i odstępie co najmniej 7 dni.
+
+### Rodzaje fiszek
+
+Każda fiszka ma rodzaj (**słownictwo**, **gramatyka**, **czasy**) i poziom CEFR (**A1-C1**).
+Po obu da się filtrować listę fiszek, a panel główny pokazuje postęp w rozbiciu na te kategorie.
+Tryb nauki wybierasz linkiem: `?mode=review` (tylko zaplanowane powtórki), `?mode=new` (tylko nowe)
+albo bez parametru (zaległe → na dziś → nowe).
+
+Seed tworzy trzy publiczne zestawy startowe (44 fiszki: 15 słownictwa, 15 gramatyki, 14 czasów)
+obok dziesięciu zestawów z listy frekwencyjnej.
+
 ## Uruchomienie przez Docker Compose
 
 Wymagany jest tylko Docker (Docker Desktop na Windows/macOS, Docker Engine + plugin `compose` na Linuksie).
