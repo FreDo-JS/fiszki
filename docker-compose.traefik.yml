@@ -1,0 +1,66 @@
+# Nakładka dla istniejącej instancji Traefika działającej na tym samym hoście.
+#
+# Używa się jej RAZEM z bazowym plikiem, nie zamiast niego:
+#   docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+#
+# Co robi:
+#   * podłącza frontend i backend do zewnętrznej sieci Traefika,
+#   * opisuje je etykietami, żeby Traefik sam utworzył trasy i certyfikat,
+#   * ZDEJMUJE publikowanie portów 8080/4000 na hoście — za reverse proxy nie
+#     mają być dostępne bezpośrednio z internetu.
+#
+# Profil "proxy" z Caddy z pliku bazowego jest wtedy zbędny — nie uruchamiaj go.
+#
+# Trzy wartości w .env muszą pasować do Twojego Traefika (patrz README):
+#   TRAEFIK_NETWORK, TRAEFIK_ENTRYPOINT, TRAEFIK_CERTRESOLVER
+
+services:
+  backend:
+    # !reset kasuje porty z pliku bazowego — bez tego Compose SCALA listy i
+    # API zostałoby wystawione również bezpośrednio na :4000, z pominięciem
+    # TLS-a. Za reverse proxy ma być dostępne wyłącznie przez Traefika.
+    ports: !reset []
+    networks:
+      - default
+      - traefik
+    labels:
+      traefik.enable: "true"
+      # Przy kontenerze w dwóch sieciach Traefik musi wiedzieć, którym adresem
+      # się z nim łączyć — bez tego trafia na sieć wewnętrzną i zwraca 502.
+      traefik.docker.network: ${TRAEFIK_NETWORK:?ustaw TRAEFIK_NETWORK w .env (nazwa zewnetrznej sieci Traefika)}
+
+      traefik.http.routers.fiszki-api.rule: Host(`${DOMAIN:?ustaw DOMAIN w .env, np. fiszki.juniodevops.xyz}`) && (PathPrefix(`/api`) || Path(`/health`))
+      # Wyższy priorytet niż trasa frontendu, żeby /api nie trafiło do SPA.
+      traefik.http.routers.fiszki-api.priority: "100"
+      traefik.http.routers.fiszki-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.fiszki-api.tls: "true"
+      traefik.http.routers.fiszki-api.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.fiszki-api.loadbalancer.server.port: "4000"
+      # Express montuje router pod /api, więc prefiksu NIE obcinamy.
+
+  frontend:
+    ports: !reset []
+    networks:
+      - default
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:?ustaw TRAEFIK_NETWORK w .env (nazwa zewnetrznej sieci Traefika)}
+
+      traefik.http.routers.fiszki-web.rule: Host(`${DOMAIN:?ustaw DOMAIN w .env, np. fiszki.juniodevops.xyz}`)
+      traefik.http.routers.fiszki-web.priority: "10"
+      traefik.http.routers.fiszki-web.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.fiszki-web.tls: "true"
+      traefik.http.routers.fiszki-web.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.fiszki-web.loadbalancer.server.port: "80"
+
+  # Baza zostaje wyłącznie w sieci wewnętrznej — Traefik nie ma do niej dostępu
+  # i nie powinien mieć.
+  db:
+    labels:
+      traefik.enable: "false"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:?ustaw TRAEFIK_NETWORK w .env (nazwa zewnetrznej sieci Traefika)}

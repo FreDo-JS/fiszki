@@ -135,6 +135,37 @@ Zasady, które warto utrzymać:
 - Rotacja kluczy JWT (`JWT_SECRET`, `JWT_REFRESH_SECRET`) jest bezpieczna w każdej chwili — wyloguje
   tylko wszystkich użytkowników. Rotacja `POSTGRES_PASSWORD` wymaga też `ALTER USER` w bazie.
 
+### Wariant A: masz już własnego Traefika
+
+Użyj nakładki [docker-compose.traefik.yml](docker-compose.traefik.yml) razem z plikiem bazowym.
+W `.env` muszą się znaleźć cztery wartości — trzy ostatnie **muszą odpowiadać Twojej instancji Traefika**,
+inaczej trasy nie powstaną:
+
+```bash
+docker network ls          # nazwa sieci Traefika -> TRAEFIK_NETWORK
+docker inspect <traefik>   # entrypoints i certificatesresolvers
+```
+
+```
+DOMAIN=fiszki.juniodevops.xyz
+TRAEFIK_NETWORK=traefik
+TRAEFIK_ENTRYPOINT=websecure
+TRAEFIK_CERTRESOLVER=letsencrypt
+```
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+```
+
+Nakładka podłącza frontend i backend do sieci Traefika, opisuje je etykietami (`/api` i `/health` do
+backendu z priorytetem 100, reszta do frontendu z priorytetem 10) i **zdejmuje publikowanie portów
+8080/4000 na hoście** — za reverse proxy aplikacja nie ma być dostępna z pominięciem TLS-a. Baza
+zostaje wyłącznie w sieci wewnętrznej, z `traefik.enable=false`.
+
+Express montuje router pod `/api`, więc prefiksu **nie** obcinamy żadnym middleware.
+
+### Wariant B: nie masz reverse proxy — użyj wbudowanego
+
 ### HTTPS jest wymagany, nie opcjonalny
 
 Ciasteczka sesji mają w trybie produkcyjnym flagę `Secure`, więc **po zwykłym HTTP logowanie przejdzie,

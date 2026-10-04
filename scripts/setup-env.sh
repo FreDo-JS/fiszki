@@ -123,10 +123,20 @@ CORS_ORIGIN=${FRONTEND_ORIGIN}
 
 AUTH_RATE_LIMIT_MAX=10
 
-# Używane wyłącznie przez opcjonalny profil "proxy" (Caddy + HTTPS):
-#   docker compose --profile proxy up -d
+# Domena aplikacji. Używana przez reverse proxy — zarówno wbudowany profil
+# "proxy" (Caddy), jak i nakładkę docker-compose.traefik.yml.
 DOMAIN=${DOMAIN_VALUE}
+
+# Tylko dla profilu "proxy" (Caddy): adres do powiadomień Let's Encrypt.
 ACME_EMAIL=
+
+# Tylko dla nakładki docker-compose.traefik.yml. Wartości MUSZĄ odpowiadać
+# Twojej instancji Traefika, inaczej trasy po cichu nie powstaną:
+#   docker network ls                        # nazwa sieci Traefika
+#   docker inspect <kontener-traefika>       # entrypoints i certificatesresolvers
+TRAEFIK_NETWORK=traefik
+TRAEFIK_ENTRYPOINT=websecure
+TRAEFIK_CERTRESOLVER=letsencrypt
 ENVFILE
 
 umask "$OLD_UMASK"
