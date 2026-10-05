@@ -3,6 +3,7 @@ import { CardLevel, CardType } from '@prisma/client';
 import { asyncHandler } from '../utils/asyncHandler';
 import * as cardService from '../services/card.service';
 import { generateCardFields } from '../services/dictionary.service';
+import { generateExercises } from '../services/exercise.service';
 
 export const listCardsHandler = asyncHandler(async (req: Request, res: Response) => {
   const { deckId, search, tag, type, level, page, pageSize } = req.query as unknown as {
@@ -47,4 +48,10 @@ export const listTagsHandler = asyncHandler(async (_req: Request, res: Response)
 export const generateFieldsHandler = asyncHandler(async (req: Request, res: Response) => {
   const fields = await generateCardFields(req.body.word);
   res.json({ fields });
+});
+
+export const getCardExercisesHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { card, pool } = await cardService.getCardWithPool(req.user!, req.params.id);
+  const exercises = generateExercises(card, pool);
+  res.json({ exercises });
 });

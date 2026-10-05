@@ -12,6 +12,7 @@ import {
   createCardHandler,
   deleteCardHandler,
   generateFieldsHandler,
+  getCardExercisesHandler,
   getCardHandler,
   listCardsHandler,
   listTagsHandler,
@@ -27,5 +28,6 @@ cardRouter.post('/', validate(createCardSchema), createCardHandler);
 cardRouter.get('/tags', listTagsHandler);
 cardRouter.post('/generate', validate(generateFieldsSchema), generateFieldsHandler);
 cardRouter.get('/:id', validate(cardIdParamSchema), getCardHandler);
+cardRouter.get('/:id/exercises', validate(cardIdParamSchema), getCardExercisesHandler);
 cardRouter.put('/:id', validate(updateCardSchema), updateCardHandler);
 cardRouter.delete('/:id', validate(cardIdParamSchema), deleteCardHandler);

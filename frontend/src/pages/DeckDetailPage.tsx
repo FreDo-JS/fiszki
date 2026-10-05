@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import clsx from 'clsx';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import * as decksApi from '../api/decks';
 import * as cardsApi from '../api/cards';
+import * as exercisesApi from '../api/exercises';
 import { Card as CardType, Deck } from '../api/types';
 import { Badge, Button, EmptyState, Input, ProgressBar, Skeleton } from '../components/ui';
 import {
@@ -12,6 +14,7 @@ import {
   TypeFilterValue,
 } from '../components/CardFilters';
 import { CARD_TYPE_LABEL, CARD_TYPE_TONE } from '../utils/cards';
+import { ExerciseLoader } from '../components/ExercisePanel';
 import { CardFormModal, CardFormValues } from '../components/CardFormModal';
 import { ImportExportModal } from '../components/ImportExportModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -37,6 +40,8 @@ export default function DeckDetailPage() {
   const [levelFilter, setLevelFilter] = useState<LevelFilterValue>('all');
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(searchParams.get('card'));
+  // Wybrana zakładka per fiszka — rozwinięcie kolejnej nie resetuje poprzedniej.
+  const [cardTab, setCardTab] = useState<Record<string, 'card' | 'exercise'>>({});
 
   const [cardFormOpen, setCardFormOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CardType | null>(null);
@@ -274,7 +279,37 @@ export default function DeckDetailPage() {
               <span className="truncate text-sm text-ink-muted">{card.translationPl}</span>
             </button>
             {expandedId === card.id && (
-              <div className="border-t border-border px-4 py-3 flex flex-col gap-2 animate-fade-in">
+              <div className="border-t border-border px-4 py-3 flex flex-col gap-3 animate-fade-in">
+                {/* Zakładki: treść fiszki albo zadanie wygenerowane z jej danych. */}
+                <div role="tablist" aria-label="Widok fiszki" className="flex gap-1.5">
+                  {(['card', 'exercise'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      role="tab"
+                      aria-selected={(cardTab[card.id] ?? 'card') === tab}
+                      onClick={() => setCardTab((t) => ({ ...t, [card.id]: tab }))}
+                      className={clsx(
+                        'min-h-touch rounded-full border px-3.5 text-sm font-medium transition-colors',
+                        (cardTab[card.id] ?? 'card') === tab
+                          ? 'border-accent bg-accent text-white'
+                          : 'border-border bg-surface-raised text-ink-muted hover:text-ink'
+                      )}
+                    >
+                      {tab === 'card' ? 'Fiszka' : 'Zadanie'}
+                    </button>
+                  ))}
+                </div>
+
+                {(cardTab[card.id] ?? 'card') === 'exercise' ? (
+                  <div className="flex flex-col gap-2">
+                    <ExerciseLoader load={() => exercisesApi.getExercises(card.id)} />
+                    <p className="text-xs text-ink-faint">
+                      Ćwiczenie do samosprawdzenia — nie zmienia terminu powtórki. Oceny liczone przez SM-2
+                      zbierane są w sesji nauki.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
                 {card.meaningEn && <p className="text-sm text-ink"><span className="font-medium text-ink-muted">{card.type === 'VOCABULARY' ? 'Znaczenie' : 'Budowa'}:</span> {card.meaningEn}</p>}
                 {card.translationPl && <p className="text-sm text-ink"><span className="font-medium text-ink-muted">Po polsku:</span> {card.translationPl}</p>}
                 {card.explanation && <p className="text-sm text-ink-muted"><span className="font-medium">Wyjaśnienie:</span> {card.explanation}</p>}
@@ -300,6 +335,8 @@ export default function DeckDetailPage() {
                     </div>
                   )}
                 </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

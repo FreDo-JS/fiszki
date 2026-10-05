@@ -41,6 +41,26 @@ wyznaczonym przez SM-2, bo to praca, na którą już się zapisałeś. Wartość
 daty następnej powtórki — każda ocena zapisuje pełną migawkę stanu. Razem z nią wycofywane są liczniki
 dnia, sesji i seria. Cofnąć można tylko ostatnią ocenę.
 
+### Zadania
+
+Każda fiszka ma zakładkę **Zadanie** z ćwiczeniem budowanym automatycznie z jej własnej treści —
+nie trzeba niczego pisać ręcznie. Powstają trzy warianty, o ile fiszka daje na nie materiał:
+
+| Wariant | Co robi | Wymaga |
+| --- | --- | --- |
+| **Wpisz** | luka w zdaniu przykładowym, odpowiedź wpisywana z klawiatury | przykładu użycia |
+| **Wybierz** | ta sama luka z czterema wariantami; błędne pochodzą z innych fiszek zestawu | przykładu lub tłumaczenia + 3 fiszek na dystraktory |
+| **Ułóż** | rozsypanka słów do złożenia w zdanie, klikaniem lub przeciąganiem | przykładu będącego jednym zdaniem (4-14 słów) |
+
+Odpowiedzi sprawdzane są z pominięciem wielkości liter i interpunkcji na brzegach, więc `RAINS.`
+zalicza się tak samo jak `rains`.
+
+**Gdzie zadanie wpływa na harmonogram:** w sesji nauki przełącznik *Fiszka / Zadanie* zmienia sposób
+oceniania — poprawna odpowiedź zapisuje ocenę **Dobrze**, błędna **Nie pamiętam**, i jedno i drugie
+przesuwa termin powtórki zgodnie z SM-2 (ocenę cofniesz klawiszem `Z`). Ta sama zakładka na liście
+fiszek służy do ćwiczenia i **nie** zmienia terminów — przeglądanie zestawu nie powinno po cichu
+zużywać powtórek.
+
 ### Rodzaje fiszek
 
 Każda fiszka ma rodzaj (**słownictwo**, **gramatyka**, **czasy**) i poziom CEFR (**A1-C1**).

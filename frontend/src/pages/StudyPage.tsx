@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import clsx from 'clsx';
 import * as studyApi from '../api/study';
 import * as decksApi from '../api/decks';
+import * as exercisesApi from '../api/exercises';
 import { Card as CardType, Rating, StudyMode } from '../api/types';
 import { Badge, Button, Card, ProgressBar, Spinner } from '../components/ui';
 import { RatingButtons } from '../components/RatingButtons';
+import { ExerciseLoader } from '../components/ExercisePanel';
 import { AudioButton } from '../components/AudioButton';
 import { Icon } from '../components/Icon';
 import { useToast } from '../context/ToastContext';
@@ -57,6 +60,8 @@ export default function StudyPage() {
   const [stats, setStats] = useState<SessionStats>({ correct: 0, incorrect: 0, startedAt: Date.now() });
   const [lastGrading, setLastGrading] = useState<LastGrading | null>(null);
   const [newAllowance, setNewAllowance] = useState<number | null>(null);
+  // 'card' = klasyczna fiszka z samooceną, 'exercise' = zadanie oceniane automatycznie.
+  const [studyTab, setStudyTab] = useState<'card' | 'exercise'>('card');
   const [elapsed, setElapsed] = useState(0);
   const shownAtRef = useRef<number>(Date.now());
 
@@ -125,8 +130,12 @@ export default function StudyPage() {
   }, [currentCard]);
 
   const handleRate = useCallback(
-    async (rating: Rating) => {
-      if (!currentCard || submitting || !revealed) return;
+    async (rating: Rating, options?: { fromExercise?: boolean }) => {
+      // Zwykła ocena wymaga wcześniejszego odsłonięcia odpowiedzi; ocena
+      // wynikająca z zadania własnego warunku nie potrzebuje, bo użytkownik
+      // odpowiedź już podał.
+      if (!currentCard || submitting) return;
+      if (!revealed && !options?.fromExercise) return;
       setSubmitting(true);
       const responseTimeMs = Date.now() - shownAtRef.current;
       const passed = isPassingRating(rating);
@@ -164,6 +173,19 @@ export default function StudyPage() {
       }
     },
     [currentCard, submitting, revealed, sessionId, index, queue, showToast]
+  );
+
+  /**
+   * W trybie zadań wynik sam wyznacza ocenę: rozwiązane poprawnie to GOOD,
+   * błąd to AGAIN. Świadomie bez stopni pośrednich — przy zadaniu nie ma
+   * miejsca na "pamiętałem z trudem", odpowiedź jest albo dobra, albo nie.
+   * Ocenę zawsze można cofnąć klawiszem Z.
+   */
+  const handleExerciseResult = useCallback(
+    (correct: boolean) => {
+      void handleRate(correct ? 'GOOD' : 'AGAIN', { fromExercise: true });
+    },
+    [handleRate]
   );
 
   const handleUndo = useCallback(async () => {
@@ -345,6 +367,45 @@ export default function StudyPage() {
         />
       </div>
 
+      {/* Fiszka albo zadanie. W trybie zadań wynik sam ustawia ocenę SM-2,
+          więc przełącznik jest zablokowany po odsłonięciu odpowiedzi — zmiana
+          w połowie oceniania mieszałaby dwie metody oceny tej samej fiszki. */}
+      <div role="tablist" aria-label="Tryb powtórki" className="flex gap-1.5">
+        {(['card', 'exercise'] as const).map((t) => (
+          <button
+            key={t}
+            role="tab"
+            aria-selected={studyTab === t}
+            disabled={revealed}
+            onClick={() => setStudyTab(t)}
+            className={clsx(
+              'min-h-touch rounded-full border px-4 text-sm font-medium transition-colors disabled:opacity-50',
+              studyTab === t
+                ? 'border-accent bg-accent text-white'
+                : 'border-border bg-surface-raised text-ink-muted hover:text-ink'
+            )}
+          >
+            {t === 'card' ? 'Fiszka' : 'Zadanie'}
+          </button>
+        ))}
+      </div>
+
+      {studyTab === 'exercise' ? (
+        <Card className="flex flex-col gap-4 p-5 sm:p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={CARD_TYPE_TONE[currentCard.type]}>{CARD_TYPE_LABEL[currentCard.type]}</Badge>
+            <Badge>{currentCard.level}</Badge>
+            <span className="font-display text-lg font-semibold text-ink">{currentCard.word}</span>
+          </div>
+
+          <ExerciseLoader
+            key={currentCard.id}
+            load={() => exercisesApi.getExercises(currentCard.id)}
+            onResult={handleExerciseResult}
+            resultLabel="Ocena zapisana automatycznie — cofniesz ją klawiszem Z."
+          />
+        </Card>
+      ) : (
       <div className="flip-scene">
         <div className={`flip-inner ${revealed ? 'is-flipped' : ''}`}>
           {/* FRONT — both faces stay mounted for the 3D flip, so the one
@@ -423,11 +484,12 @@ export default function StudyPage() {
           </Card>
         </div>
       </div>
+      )}
 
       {/* The grading row lives outside the card on purpose: a long grammar
           explanation makes the back face scroll, and buttons inside it would
           scroll out of reach exactly when they are needed. */}
-      {revealed && (
+      {studyTab === 'card' && revealed && (
         <div className="animate-slide-up">
           <p className="mb-2 text-center text-xs text-ink-faint">Jak dobrze pamiętałeś?</p>
           <RatingButtons onRate={handleRate} disabled={submitting} />

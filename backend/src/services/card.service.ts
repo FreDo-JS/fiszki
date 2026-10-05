@@ -185,3 +185,22 @@ export async function deleteCard(user: DeckAuthContext, id: string) {
 export async function listAllTags() {
   return prisma.tag.findMany({ orderBy: { name: 'asc' } });
 }
+
+/**
+ * Fiszka plus pula innych fiszek z tego samego zestawu, z której generator
+ * zadań czerpie błędne odpowiedzi. Pula celowo ogranicza się do zestawu —
+ * dystraktor z zupełnie innego materiału byłby zbyt łatwy do odrzucenia.
+ */
+export async function getCardWithPool(user: DeckAuthContext, id: string, poolSize = 40) {
+  const card = await prisma.card.findUnique({ where: { id }, include: { deck: true } });
+  if (!card) throw ApiError.notFound('Fiszka nie istnieje');
+  if (!canRead(user, card.deck)) throw ApiError.forbidden('Nie masz dostępu do tej fiszki');
+
+  const pool = await prisma.card.findMany({
+    where: { deckId: card.deckId, id: { not: card.id }, type: card.type },
+    take: poolSize,
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return { card, pool };
+}
