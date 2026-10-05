@@ -164,6 +164,18 @@ zostaje wyłącznie w sieci wewnętrznej, z `traefik.enable=false`.
 
 Express montuje router pod `/api`, więc prefiksu **nie** obcinamy żadnym middleware.
 
+**Przeglądarka ostrzega o certyfikacie, a po przejściu dalej widać 404?** To jedna usterka widziana
+dwa razy: żaden router nie dopasował domeny, więc Traefik oddaje swój domyślny certyfikat
+(`CN=TRAEFIK DEFAULT CERT`) i domyślne 404. Prawie zawsze oznacza to, że `TRAEFIK_ENTRYPOINT` albo
+`TRAEFIK_CERTRESOLVER` nie istnieje w Twojej instancji. Przyczynę wskaże:
+
+```bash
+./scripts/diagnose-traefik.sh
+```
+
+Skrypt zestawia obok siebie nazwy, które Traefik naprawdę ma, z tymi, których oczekuje nakładka,
+i wyciąga z logów wpisy `EntryPoint doesn't exist` oraz `nonexistent certificate resolver`.
+
 ### Wariant B: nie masz reverse proxy — użyj wbudowanego
 
 ### HTTPS jest wymagany, nie opcjonalny
