@@ -94,6 +94,34 @@ JWT_REFRESH_SECRET="$(gen_secret)"
 
 DOMAIN_VALUE="${DOMAIN:-localhost}"
 
+# Nazwy sieci, entrypointu i resolvera różnią się między instalacjami Traefika,
+# a wpisanie złej nie daje błędu — tylko 404 i certyfikat zastępczy, co trudno
+# powiązać z przyczyną. Dlatego czytamy je z działającego kontenera, zamiast
+# zgadywać. Gdy Traefika nie ma albo konfiguruje go plik yml, zostają wartości
+# domyślne i komunikat, żeby je sprawdzić ręcznie.
+TRAEFIK_NETWORK_VALUE="traefik"
+TRAEFIK_ENTRYPOINT_VALUE="websecure"
+TRAEFIK_CERTRESOLVER_VALUE="letsencrypt"
+TRAEFIK_DETECTED=""
+
+if command -v docker >/dev/null 2>&1; then
+  TRAEFIK_CT="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -i traefik | head -1)"
+  if [ -n "$TRAEFIK_CT" ]; then
+    TRAEFIK_ARGS="$(docker inspect "$TRAEFIK_CT" --format '{{range .Args}}{{println .}}{{end}}' 2>/dev/null)"
+
+    DET_NET="$(docker inspect "$TRAEFIK_CT" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}
+{{end}}' 2>/dev/null | grep -v '^$' | head -1)"
+    # Entrypoint obsługujący :443 — tam trafia ruch HTTPS.
+    DET_EP="$(printf '%s' "$TRAEFIK_ARGS" | sed -n 's/^--entrypoints\.\([^.]*\)\.address=:443$/\1/p' | head -1)"
+    DET_CR="$(printf '%s' "$TRAEFIK_ARGS" | sed -n 's/^--certificatesresolvers\.\([^.]*\)\..*/\1/p' | head -1)"
+
+    [ -n "$DET_NET" ] && TRAEFIK_NETWORK_VALUE="$DET_NET"
+    [ -n "$DET_EP" ] && TRAEFIK_ENTRYPOINT_VALUE="$DET_EP"
+    [ -n "$DET_CR" ] && TRAEFIK_CERTRESOLVER_VALUE="$DET_CR"
+    TRAEFIK_DETECTED="$TRAEFIK_CT"
+  fi
+fi
+
 if [ "$LOCAL" -eq 1 ]; then
   FRONTEND_ORIGIN="http://localhost:8080"
   API_URL="http://localhost:4000/api"
@@ -149,9 +177,9 @@ ACME_EMAIL=
 # Twojej instancji Traefika, inaczej trasy po cichu nie powstaną:
 #   docker network ls                        # nazwa sieci Traefika
 #   docker inspect <kontener-traefika>       # entrypoints i certificatesresolvers
-TRAEFIK_NETWORK=traefik
-TRAEFIK_ENTRYPOINT=websecure
-TRAEFIK_CERTRESOLVER=letsencrypt
+TRAEFIK_NETWORK=${TRAEFIK_NETWORK_VALUE}
+TRAEFIK_ENTRYPOINT=${TRAEFIK_ENTRYPOINT_VALUE}
+TRAEFIK_CERTRESOLVER=${TRAEFIK_CERTRESOLVER_VALUE}
 ENVFILE
 
 umask "$OLD_UMASK"
@@ -166,9 +194,19 @@ echo "Następny krok — z katalogu projektu ($PROJECT_ROOT):"
 echo "  docker compose up -d --build"
 echo "  docker compose --profile seed run --rm seeder   # jednorazowo, dane startowe"
 echo
-echo "Masz własnego Traefika? Uzupełnij w .env TRAEFIK_NETWORK / TRAEFIK_ENTRYPOINT /"
-echo "TRAEFIK_CERTRESOLVER i uruchom z nakładką:"
-echo "  docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build"
+if [ -n "$TRAEFIK_DETECTED" ]; then
+  echo "Wykryto Traefika w kontenerze \"$TRAEFIK_DETECTED\" i wpisano jego ustawienia:"
+  echo "  TRAEFIK_NETWORK=$TRAEFIK_NETWORK_VALUE"
+  echo "  TRAEFIK_ENTRYPOINT=$TRAEFIK_ENTRYPOINT_VALUE"
+  echo "  TRAEFIK_CERTRESOLVER=$TRAEFIK_CERTRESOLVER_VALUE"
+  echo "Uruchom z nakładką:"
+  echo "  docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build"
+else
+  echo "Masz własnego Traefika? Sprawdź jego nazwy i wpisz je w .env"
+  echo "(TRAEFIK_NETWORK / TRAEFIK_ENTRYPOINT / TRAEFIK_CERTRESOLVER), a potem:"
+  echo "  docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build"
+  echo "Diagnostyka rozbieżności: ./scripts/diagnose-traefik.sh"
+fi
 
 if [ "$LOCAL" -eq 0 ] && [ "$SCHEME" = "https" ]; then
   echo
