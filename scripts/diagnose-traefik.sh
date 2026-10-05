@@ -29,6 +29,34 @@ WANT_NET="$(grep -E '^TRAEFIK_NETWORK=' .env | cut -d= -f2-)"
 WANT_EP="$(grep -E '^TRAEFIK_ENTRYPOINT=' .env | cut -d= -f2-)"
 WANT_CR="$(grep -E '^TRAEFIK_CERTRESOLVER=' .env | cut -d= -f2-)"
 
+say "1b. Spójność adresów w .env"
+# Najczęstszy błąd po wdrożeniu: DOMAIN poprawione, ale CORS_ORIGIN i
+# VITE_API_URL zostały lokalne. Objaw jest mylący, bo strona otwiera się
+# normalnie, a dopiero logowanie zwraca 403 albo zapytania idą w pustkę.
+CORS_ORIGIN_V="$(grep -E '^CORS_ORIGIN=' .env | cut -d= -f2-)"
+VITE_API_URL_V="$(grep -E '^VITE_API_URL=' .env | cut -d= -f2-)"
+PROBLEMY=0
+
+case "$CORS_ORIGIN_V" in
+  *"$DOMAIN"*) echo "CORS_ORIGIN zawiera domenę — OK" ;;
+  *) echo "BŁĄD: CORS_ORIGIN ($CORS_ORIGIN_V) nie pasuje do DOMAIN ($DOMAIN)"
+     echo "      -> API odrzuci logowanie i zapisy z komunikatem 'Invalid request origin'"
+     PROBLEMY=$((PROBLEMY + 1)) ;;
+esac
+
+case "$VITE_API_URL_V" in
+  *"$DOMAIN"*) echo "VITE_API_URL zawiera domenę — OK" ;;
+  *) echo "BŁĄD: VITE_API_URL ($VITE_API_URL_V) nie pasuje do DOMAIN ($DOMAIN)"
+     echo "      -> przeglądarka wyśle zapytania pod zły adres"
+     PROBLEMY=$((PROBLEMY + 1)) ;;
+esac
+
+if [ "$PROBLEMY" -gt 0 ]; then
+  echo
+  echo "Po poprawieniu .env frontend MUSI zostać przebudowany (--build),"
+  echo "bo VITE_API_URL jest wkompilowywane w bundle, a nie czytane przy starcie."
+fi
+
 say "2. Kontener Traefika"
 TRAEFIK="$(docker ps --filter ancestor=traefik --format '{{.Names}}' | head -1)"
 [ -z "$TRAEFIK" ] && TRAEFIK="$(docker ps --format '{{.Names}}' | grep -i traefik | head -1)"
